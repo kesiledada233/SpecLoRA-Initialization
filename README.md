@@ -71,16 +71,6 @@ python experiments/train_openpangu_speclora.py \
     --out_dir outputs_gsm8k_speclora_r16
 ```
 
-## Citation
-
-```bibtex
-@article{speclora2025,
-  title={SpecLoRA: Frequency-Domain-Aware Initialization for LoRA Fine-Tuning},
-  author={...},
-  year={2025}
-}
-```
-
 ## License
 
 MIT
