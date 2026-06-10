@@ -7,30 +7,24 @@ the spectral properties of converged models and accelerate early convergence.
 """
 
 from .core import (
-    fdt_initialize_,
-    apply_fdt_to_lora,
-    apply_fdt_to_all_params,
-    init_lora_with_pink_noise,
-    init_lora_with_custom_spectrum,
+    speclora_initialize_,
+    apply_speclora_to_lora,
 )
 from .measure import (
     measure_alpha,
     plot_power_spectrum,
     analyze_lora_spectra,
-    verify_fda_initialization,
+    verify_speclora_initialization,
     compare_initializations,
 )
 
 __version__ = "0.1.0"
 __all__ = [
-    "fdt_initialize_",
-    "apply_fdt_to_lora",
-    "apply_fdt_to_all_params",
-    "init_lora_with_pink_noise",
-    "init_lora_with_custom_spectrum",
+    "speclora_initialize_",
+    "apply_speclora_to_lora",
     "measure_alpha",
     "plot_power_spectrum",
     "analyze_lora_spectra",
-    "verify_fda_initialization",
+    "verify_speclora_initialization",
     "compare_initializations",
 ]

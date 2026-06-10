@@ -11,21 +11,22 @@ pip install -r requirements.txt
 ```
 
 ```python
-from speclora import apply_fdt_to_lora
+from speclora import apply_speclora_to_lora
 
 # Apply SpecLoRA initialization before training
-model = apply_fdt_to_lora(model, alpha=0.6, method='fft')
+model = apply_speclora_to_lora(model, alpha=0.6, method='fft')
 ```
 
 ## Core API
 
 | Function | Description |
 |----------|-------------|
-| `fdt_initialize_(tensor, alpha=1.2, method='fft')` | In-place power-law initialization of a tensor |
-| `apply_fdt_to_lora(model, alpha=0.6)` | Apply to all LoRA layers with Xavier variance normalization |
-| `apply_fdt_to_all_params(model, alpha=1.2)` | Apply to all trainable parameters (for full fine-tuning) |
+| `speclora_initialize_(tensor, alpha=1.2, method='fft')` | In-place power-law initialization of a tensor |
+| `apply_speclora_to_lora(model, alpha=0.6)` | Apply to all LoRA layers with Xavier variance normalization |
 | `measure_alpha(tensor)` | Measure the power-law exponent of a tensor |
 | `analyze_lora_spectra(model)` | Analyze all LoRA layers in a model |
+| `verify_speclora_initialization(model, target_alpha)` | Verify initialization quality |
+| `compare_initializations(baseline, speclora, layer_name)` | Compare spectra of two initializations |
 
 ## Repository Structure
 
@@ -34,76 +35,40 @@ speclora-repo/
 ├── speclora/              # Core library
 │   ├── core.py            # Initialization implementations (FFT + AR)
 │   └── measure.py         # Spectral analysis tools
-├── experiments/           # Main experiments
-│   ├── train_benchmark_fdt_init.py
-│   ├── train_deepseek_fdt_lora_final.py
-│   ├── train_openpangu_fdt_lora_final.py
-│   ├── train_qwen2.5_fdt_lora_final.py
-│   ├── train_sharegpt_fdt_init.py
-│   ├── train_wikitext_fdt_init.py
-│   ├── evaluate_downstream.py
-│   └── run_mistral.sh
-├── rebuttal/              # Rebuttal experiments
-│   ├── train_openpangu_loraone.py
-│   ├── train_openpangu_dora.py
-│   └── train_openpangu_multi_init.py
-├── analysis/              # Plotting and result collection
-│   ├── plot_all_figures.py
-│   ├── plot_ablation.py
-│   ├── plot_comparison.py
-│   ├── analyze_time_to_threshold.py
-│   └── collect_all_results.py
-├── tests/                 # Unit tests
-│   ├── test_multi_init.py
-│   └── test_fdt_initialization.py
-├── results/               # Key experimental results
-│   ├── all_experiments_results.csv
-│   └── time_to_threshold_results.json
-├── data/                  # Data directory (populate via README links)
+├── experiments/
+│   └── train_openpangu_speclora.py   # Unified training script (4 datasets)
+├── tests/
+│   └── test_speclora_initialization.py
+├── results/               # Key experimental results (alpha=0.6)
+│   ├── openpangu_cmmlu_alpha0.6.json
+│   ├── openpangu_gsm8k_alpha0.6.json
+│   ├── openpangu_mbpp_alpha0.6.json
+│   ├── openpangu_sharegpt_alpha0.6.json
+│   ├── qwen2.5_cmmlu_alpha0.6.json
+│   ├── qwen2.5_gsm8k_alpha0.6.json
+│   ├── qwen2.5_mbpp_alpha0.6.json
+│   └── qwen2.5_sharegpt_alpha0.6.json
 ├── requirements.txt
 └── README.md
 ```
 
+## Datasets
+
+The unified training script supports the following datasets:
+- **GSM8K**: Mathematical reasoning
+- **CMMLU**: Chinese general knowledge
+- **ShareGPT**: Dialogue interaction
+- **MBPP**: Code generation
+
 ## Reproduce Main Experiments
 
-### Benchmark Models
-
 ```bash
-# Mistral
-bash experiments/run_mistral.sh
-
-# DeepSeek
-python experiments/train_deepseek_fdt_lora_final.py
-
-# OpenPangu
-python experiments/train_openpangu_fdt_lora_final.py
-
-# Qwen2.5
-python experiments/train_qwen2.5_fdt_lora_final.py
-```
-
-### Downstream Evaluation
-
-```bash
-python experiments/evaluate_downstream.py --model_path <path> --task <task_name>
-```
-
-### Generate Figures
-
-```bash
-python analysis/plot_all_figures.py
-python analysis/plot_ablation.py
-python analysis/plot_comparison.py
-```
-
-## Rebuttal Experiments
-
-See [`rebuttal/README.md`](rebuttal/README.md) for details on the supplementary experiments comparing against LoRA-One, DoRA, and PiSSA.
-
-```bash
-python rebuttal/train_openpangu_loraone.py
-python rebuttal/train_openpangu_dora.py
-python rebuttal/train_openpangu_multi_init.py
+python experiments/train_openpangu_speclora.py \
+    --dataset gsm8k \
+    --init_method speclora \
+    --alpha 0.6 \
+    --lora_r 16 \
+    --out_dir outputs_gsm8k_speclora_r16
 ```
 
 ## Citation

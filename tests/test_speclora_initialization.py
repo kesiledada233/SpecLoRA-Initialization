@@ -2,11 +2,11 @@ import torch
 from transformers import AutoModelForCausalLM
 from peft import get_peft_model, LoraConfig, TaskType
 
-from speclora import apply_fdt_to_lora, measure_alpha
+from speclora import apply_speclora_to_lora, measure_alpha
 
 
 print("=" * 70)
-print("FDT Initialization Test")
+print("SpeLoRA Initialization Test")
 print("=" * 70)
 
 # 1. Load base model
@@ -35,9 +35,9 @@ for name, param in model.named_parameters():
 
 print(f"\nTotal LoRA params: {len(lora_params)}")
 
-# 4. Apply FDT initialization
-print("\n[4/4] Applying FDT initialization...")
-model = apply_fdt_to_lora(model, alpha=1.2, verbose=True)
+# 4. Apply SpeLoRA initialization
+print("\n[4/4] Applying SpeLoRA initialization...")
+model = apply_speclora_to_lora(model, alpha=1.2, verbose=True)
 
 # 5. Verify alpha values
 print("\n" + "=" * 70)

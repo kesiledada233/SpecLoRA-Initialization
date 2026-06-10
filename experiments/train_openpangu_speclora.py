@@ -1,4 +1,3 @@
-
 import os
 os.environ['DISABLE_NPU_FUSED_ATTENTION'] = '1'
 os.environ['NPU_FUSED_INFER_ATTENTION'] = '0'
@@ -47,40 +46,40 @@ print("\n" + "="*70)
 print("加载初始化模块")
 print("="*70)
 
-for mod in ['fda_init', 'measure_alpha']:
+for mod in ['speclora_init', 'measure_alpha']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-FDA_INIT_PATH = None  # set to your local path
+SPECLORA_INIT_PATH = '/rebuttal/FDASOC_init_code'
 
 for path in sys.path[:]:
-    if 'FDA_Init' in path and path != FDA_INIT_PATH:
+    if 'FDA_Init' in path and path != SPECLORA_INIT_PATH:
         sys.path.remove(path)
 
-if FDA_INIT_PATH in sys.path:
-    sys.path.remove(FDA_INIT_PATH)
-# sys.path.insert(0, FDA_INIT_PATH)
+if SPECLORA_INIT_PATH in sys.path:
+    sys.path.remove(SPECLORA_INIT_PATH)
+# sys.path.insert(0, SPECLORA_INIT_PATH)
 
 try:
-    from lora_fda_init import apply_fda_to_lora
-    from measure_alpha import analyze_lora_spectra, verify_fda_initialization
+    from lora_fda_init import apply_speclora_to_lora
+    from measure_alpha import analyze_lora_spectra, verify_speclora_initialization
     
-    FDA_INIT_AVAILABLE = True
-    print("[导入] FDA 自定义模块加载成功")
+    SPECLORA_INIT_AVAILABLE = True
+    print("[导入] SpeLoRA module加载成功")
     
 except ImportError as e:
-    print(f"[导入] 失败或未找到自定义FDA模块: {e}")
+    print(f"[导入] 失败或未找到SpeLoRA module: {e}")
     print("[导入] 将仅支持 PEFT 原生的 peft_default, pissa, loftq")
-    FDA_INIT_AVAILABLE = False
+    SPECLORA_INIT_AVAILABLE = False
 
 print("="*70 + "\n")
 
 # 数据集路径配置
 DATASET_PATHS = {
-    'gsm8k': None,  # /path/to/gsm8k
-    'cmmlu': None,  # /path/to/cmmlu/processed
-    'sharegpt': None,  # /path/to/sharegpt_datasets
-    'mbpp': None,  # /path/to/mbpp/processed
+    'gsm8k': None,  # /path/to/gsm8k,
+    'cmmlu': None,  # /path/to/cmmlu/processed,
+    'sharegpt': None,  # /path/to/sharegpt_datasets,
+    'mbpp': None,  # /path/to/mbpp/processed,
 }
 
 # 数据集类
@@ -211,7 +210,7 @@ def get_args():
                    choices=['peft_default', 'fda', 'pissa', 'loftq'],
                    help="选择初始化方法：peft_default(随机), fda(谱域初始), pissa(SVD主成分), loftq(量化感知)")
     ap.add_argument("--use_fda_init", action="store_true",
-                   help="[兼容旧版] 开启 FDA 初始化 (等同于 --init_method fda)")
+                   help="[兼容旧版] 开启 SpeLoRA initialization (等同于 --init_method fda)")
     
     # FDA 特定配置
     ap.add_argument("--fda_alpha", type=float, default=0.6)
@@ -397,23 +396,23 @@ def main():
     model = get_peft_model(model, lora_config)
     
     # 如果是 FDA，在获取 PEFT 模型后二次修改权重
-    if args.init_method == 'fda' and FDA_INIT_AVAILABLE:
-        print(f"\n[FDA] 覆盖初始化: α={args.fda_alpha:.2f}, 降噪方法={args.fda_method}")
-        apply_fda_to_lora(model, alpha=args.fda_alpha, method=args.fda_method, unroll_order=args.unroll_order, verbose=args.verbose)
+    if args.init_method == 'fda' and SPECLORA_INIT_AVAILABLE:
+        print(f"\n[SpeLoRA] 覆盖初始化: α={args.fda_alpha:.2f}, 降噪方法={args.fda_method}")
+        apply_speclora_to_lora(model, alpha=args.fda_alpha, method=args.fda_method, unroll_order=args.unroll_order, verbose=args.verbose)
         
         if args.verify_fda:
-            print("[FDA] 验证初始化质量...")
-            verify_success = verify_fda_initialization(
+            print("[SpeLoRA] 验证初始化质量...")
+            verify_success = verify_speclora_initialization(
                 model, target_alpha=args.fda_alpha, tolerance=0.15, verbose=True)
             init_info['verification_passed'] = verify_success
         
         if args.plot_spectra:
-            print("[FDA] 分析初始功率谱...")
+            print("[SpeLoRA] 分析初始功率谱...")
             spectra_dir = os.path.join(args.out_dir, 'init_spectra')
             os.makedirs(spectra_dir, exist_ok=True)
             alphas = analyze_lora_spectra(model, save_dir=spectra_dir, plot_top_n=3, verbose=args.verbose)
             init_info['measured_alphas_init'] = {k: float(v) for k, v in alphas.items()}
-            print(f"[FDA]  功率谱保存到: {spectra_dir}")
+            print(f"[SpeLoRA]  功率谱保存到: {spectra_dir}")
 
     # 结束计时
     init_time = time.time() - init_start_time
@@ -638,7 +637,7 @@ def main():
     print(f"[测试] 平均损失: {test_loss:.4f}, 标准差: {test_std:.4f}\n")
     
     # 步骤 7.5: 训练后功率谱测量 
-    if args.init_method == 'fda' and args.measure_final_spectrum and FDA_INIT_AVAILABLE:
+    if args.init_method == 'fda' and args.measure_final_spectrum and SPECLORA_INIT_AVAILABLE:
         print("步骤 7.5: 训练后功率谱测量")
         spectra_dir_final = os.path.join(args.out_dir, 'final_spectra')
         os.makedirs(spectra_dir_final, exist_ok=True)

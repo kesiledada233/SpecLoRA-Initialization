@@ -76,16 +76,7 @@ def plot_power_spectrum(
     show_fit: bool = True,
     figsize: Tuple[int, int] = (10, 6)
 ):
-    """
-    Plot power spectrum in log-log scale.
-
-    Args:
-        tensor: Parameter tensor.
-        title: Plot title.
-        save_path: Save path (None to display).
-        show_fit: Show power-law fit line.
-        figsize: Figure size.
-    """
+    """Plot power spectrum in log-log scale."""
     alpha, freqs, power = measure_alpha(tensor, return_full_spectrum=True)
 
     plt.figure(figsize=figsize)
@@ -176,14 +167,14 @@ def analyze_lora_spectra(
     return results
 
 
-def verify_fdt_initialization(
+def verify_speclora_initialization(
     model: torch.nn.Module,
     target_alpha: float,
     tolerance: float = 0.1,
     verbose: bool = True
 ) -> bool:
     """
-    Verify whether FDT initialization succeeded.
+    Verify whether SpeLoRA initialization succeeded.
 
     Args:
         model: Initialized model.
@@ -211,7 +202,7 @@ def verify_fdt_initialization(
 
     if verbose:
         print("\n" + "="*70)
-        print("FDT Initialization Verification".center(70))
+        print("SpeLoRA Initialization Verification".center(70))
         print("="*70)
         print(f"Target alpha: {target_alpha:.3f}")
         print(f"Measured alpha: {np.mean(valid_alphas):.3f} +/- {np.std(valid_alphas):.3f}")
@@ -235,7 +226,7 @@ def verify_fdt_initialization(
 
 def compare_initializations(
     model_baseline: torch.nn.Module,
-    model_fdt: torch.nn.Module,
+    model_speclora: torch.nn.Module,
     layer_name: str,
     save_path: Optional[str] = None
 ):
@@ -244,29 +235,29 @@ def compare_initializations(
 
     Args:
         model_baseline: Baseline-initialized model.
-        model_fdt: FDT-initialized model.
+        model_speclora: SpeLoRA-initialized model.
         layer_name: Layer name to compare.
         save_path: Save path.
     """
     param_baseline = dict(model_baseline.named_parameters())[layer_name]
-    param_fdt = dict(model_fdt.named_parameters())[layer_name]
+    param_speclora = dict(model_speclora.named_parameters())[layer_name]
 
     alpha_baseline, freqs_b, power_b = measure_alpha(param_baseline, return_full_spectrum=True)
-    alpha_fdt, freqs_f, power_f = measure_alpha(param_fdt, return_full_spectrum=True)
+    alpha_speclora, freqs_f, power_f = measure_alpha(param_speclora, return_full_spectrum=True)
 
     plt.figure(figsize=(12, 6))
 
     plt.loglog(freqs_b, power_b, 'o-', markersize=3, alpha=0.6,
                label=f'Xavier (alpha={alpha_baseline:.3f})', color='blue')
     plt.loglog(freqs_f, power_f, 's-', markersize=3, alpha=0.6,
-               label=f'FDT (alpha={alpha_fdt:.3f})', color='red')
+               label=f'SpeLoRA (alpha={alpha_speclora:.3f})', color='red')
 
     f_ref = freqs_f[len(freqs_f)//4]
-    p_ref_fdt = power_f[len(power_f)//4]
+    p_ref_speclora = power_f[len(power_f)//4]
 
-    theory_line = p_ref_fdt * (freqs_f / f_ref) ** (-alpha_fdt)
+    theory_line = p_ref_speclora * (freqs_f / f_ref) ** (-alpha_speclora)
     plt.loglog(freqs_f, theory_line, 'r--', linewidth=2, alpha=0.5,
-               label=f'Theory: f^(-{alpha_fdt:.2f})')
+               label=f'Theory: f^(-{alpha_speclora:.2f})')
 
     plt.xlabel('Frequency', fontsize=12)
     plt.ylabel('Power Spectral Density', fontsize=12)

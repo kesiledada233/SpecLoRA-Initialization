@@ -76,3 +76,4 @@ config.json
 
 # Misc
 kernel_meta/
+.DS_Store

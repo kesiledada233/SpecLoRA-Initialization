@@ -1,14 +1,3 @@
-"""
-Frequency-domain-aware initialization for LoRA fine-tuning.
-
-Generates power-law noise (pink noise, alpha ~ 0.6-1.2) to match
-the spectral properties of converged models and accelerate early convergence.
-
-Methods:
-    fft: Exact frequency-domain synthesis via inverse FFT.
-    ar:  Fast autoregressive approximation for large-scale deployment.
-"""
-
 import torch
 import numpy as np
 from typing import Optional
@@ -16,24 +5,21 @@ import warnings
 import math
 
 
-def fdt_initialize_(
+def speclora_initialize_(
     tensor: torch.Tensor,
     alpha: float = 1.2,
     temp_ratio: Optional[float] = None,
     method: str = 'fft',
-    unroll_order: str = 'row',
     verbose: bool = False
 ) -> torch.Tensor:
     """
-    In-place power-law initialization. Returns unnormalized noise;
-    the caller decides the variance scaling.
+    In-place power-law initialization. Returns unnormalized noise.
 
     Args:
         tensor: Parameter tensor of arbitrary shape.
         alpha: Power-law exponent (recommended 0.6 for LoRA, or 1.2).
         temp_ratio: Optional high/low frequency energy ratio.
         method: 'fft' (exact) or 'ar' (fast approximate).
-        unroll_order: 'row' (C-contiguous) or 'col' (Fortran-contiguous).
         verbose: Print detailed info.
 
     Returns:
@@ -47,7 +33,7 @@ def fdt_initialize_(
         numel = tensor.numel()
 
         if verbose:
-            print(f"FDT init: shape={original_shape}, alpha={alpha:.2f}, method={method}, order={unroll_order}")
+            print(f"SpeLoRA init: shape={original_shape}, alpha={alpha:.2f}, method={method}")
 
         if method == 'fft':
             n_freqs = numel // 2 + 1
@@ -104,15 +90,7 @@ def fdt_initialize_(
             raise ValueError(f"Unknown method: {method}")
 
         tensor_flat = torch.from_numpy(time_series).to(dtype=original_dtype, device=original_device)
-
-        if unroll_order == 'row':
-            tensor.copy_(tensor_flat.reshape(original_shape))
-        elif unroll_order == 'col':
-            reversed_shape = tuple(reversed(original_shape))
-            dims_reversed = tuple(range(len(original_shape) - 1, -1, -1))
-            tensor.copy_(tensor_flat.reshape(reversed_shape).permute(dims_reversed))
-        else:
-            raise ValueError(f"Unknown unroll_order: {unroll_order}. Use 'row' or 'col'.")
+        tensor.copy_(tensor_flat.reshape(original_shape))
 
         if verbose:
             actual_std = tensor.std().item()
@@ -121,15 +99,14 @@ def fdt_initialize_(
     return tensor
 
 
-def apply_fdt_to_lora(
+def apply_speclora_to_lora(
     model: torch.nn.Module,
     alpha: float = 1.2,
     temp_ratio: Optional[float] = None,
     method: str = 'fft',
-    unroll_order: str = 'row',
     verbose: bool = True
 ) -> torch.nn.Module:
-    """Apply FDT initialization to LoRA layers with Xavier variance normalization."""
+    """Apply SpeLoRA initialization to LoRA layers with Xavier variance normalization."""
 
     initialized_count = 0
     skipped_count = 0
@@ -137,12 +114,12 @@ def apply_fdt_to_lora(
 
     if verbose:
         print("\n" + "="*70)
-        print("Apply FDT initialization to LoRA layers (with Xavier normalization)")
+        print("Apply SpeLoRA initialization to LoRA layers (with Xavier normalization)")
         print("="*70)
         print(f"Config: alpha={alpha:.2f}", end='')
         if temp_ratio:
             print(f", temp_ratio={temp_ratio:.2f}", end='')
-        print(f", method={method}, order={unroll_order}")
+        print(f", method={method}")
         print("-"*70)
 
     lora_patterns = ['lora', 'adapter', 'delta', 'ia3']
@@ -177,12 +154,11 @@ def apply_fdt_to_lora(
                 if verbose:
                     print(f"    Xavier std: {target_std:.6f} (fan_in={fan_in}, fan_out={fan_out})")
 
-                fdt_initialize_(
+                speclora_initialize_(
                     param.data,
                     alpha=alpha,
                     temp_ratio=temp_ratio,
                     method=method,
-                    unroll_order=unroll_order,
                     verbose=False
                 )
 
@@ -234,90 +210,3 @@ def apply_fdt_to_lora(
         print("="*70)
 
     return model
-
-
-def apply_fdt_to_all_params(
-    model: torch.nn.Module,
-    alpha: float = 1.2,
-    temp_ratio: Optional[float] = None,
-    method: str = 'fft',
-    skip_frozen: bool = True,
-    verbose: bool = True
-) -> torch.nn.Module:
-    """
-    Apply FDT initialization to all parameters (for full fine-tuning or pretraining).
-
-    Args:
-        model: Model to initialize.
-        alpha: Power-law exponent.
-        temp_ratio: Optional temperature ratio.
-        method: Initialization method.
-        skip_frozen: Skip frozen parameters.
-        verbose: Print logs.
-
-    Returns:
-        Initialized model (modified in-place).
-    """
-    initialized_count = 0
-    skipped_count = 0
-    total_params = 0
-
-    if verbose:
-        print("\n" + "="*70)
-        print("FDT initialization - all parameters".center(70))
-        print("="*70)
-
-    for name, param in model.named_parameters():
-        if skip_frozen and not param.requires_grad:
-            skipped_count += 1
-            continue
-
-        if len(param.shape) >= 2:
-            if verbose and initialized_count < 5:
-                print(f"{name:60s} {list(param.shape)}")
-
-            fdt_initialize_(
-                param,
-                alpha=alpha,
-                temp_ratio=temp_ratio,
-                method=method,
-                verbose=False
-            )
-
-            initialized_count += 1
-            total_params += param.numel()
-
-    if verbose:
-        print("-"*70)
-        print(f"Done: {initialized_count} params, {total_params:,} elements")
-        if skipped_count > 0:
-            print(f"  skipped: {skipped_count} frozen/1D params")
-        print("="*70 + "\n")
-
-    return model
-
-
-def init_lora_with_pink_noise(
-    model: torch.nn.Module,
-    alpha: float = 0.6,
-    unroll_order: str = 'row',
-    verbose: bool = True
-) -> torch.nn.Module:
-    """Convenience function: initialize LoRA with pink noise (recommended config)."""
-    return apply_fdt_to_lora(model, alpha=alpha, method='fft', unroll_order=unroll_order, verbose=verbose)
-
-
-def init_lora_with_custom_spectrum(
-    model: torch.nn.Module,
-    alpha: float,
-    temp_ratio: float,
-    verbose: bool = True
-) -> torch.nn.Module:
-    """Convenience function: initialize LoRA with custom spectrum (advanced)."""
-    return apply_fdt_to_lora(
-        model,
-        alpha=alpha,
-        temp_ratio=temp_ratio,
-        method='fft',
-        verbose=verbose
-    )
