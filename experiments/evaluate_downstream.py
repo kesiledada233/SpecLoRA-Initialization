@@ -1,21 +1,3 @@
-"""
-下游任务评估脚本 - 支持 4 数据集的完整评估
-
-数据集:
-  - gsm8k: 数学推理 (准确率)
-  - cmmlu: 中文知识 (准确率)
-  - sharegpt: 对话交互 (Perplexity)
-  - mbpp: 代码生成 (通过率)
-
-运行示例:
-  python evaluate_downstream.py \
-      --model_path outputs_gsm8k_alpha1.1_r16/best_model \
-      --base_model /opt/pangu/openPangu-Embedded-7B-V1.1 \
-      --dataset gsm8k \
-      --device npu:1 \
-      --num_samples 100
-"""
-
 import os
 import sys
 import time
@@ -29,7 +11,6 @@ import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 
-# ==================== 数据集路径配置 ====================
 DATASET_PATHS = {
     'gsm8k': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/gsm8k',
     'cmmlu': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/cmmlu/processed',
@@ -37,24 +18,23 @@ DATASET_PATHS = {
     'mbpp': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/mbpp/processed',
 }
 
-# ==================== 评估函数 ====================
 
 class GSM8KEvaluator:
-    """GSM8K 数学推理评估"""
+    """GSM8K """
 
     def __init__(self, tokenizer, device):
         self.tokenizer = tokenizer
         self.device = device
 
     def format_prompt(self, question):
-        return f"问题：{question}\n解答："
+        return f"{question}\n"
 
     def extract_answer(self, text):
-        """提取 GSM8K 答案中的数字"""
-        # GSM8K 答案格式: "#### 42" 或 "The answer is 42"
+        """ GSM8K """
+        # GSM8K : "#### 42"  "The answer is 42"
         patterns = [
             r'####\s*([-+]?\d*\.?\d+)',
-            r'答案[是为][:：]\s*([-+]?\d*\.?\d+)',
+            r'[][:]\s*([-+]?\d*\.?\d+)',
             r'answer\s+is\s+([-+]?\d*\.?\d+)',
             r'=\s*([-+]?\d*\.?\d+)(?:\s|$|\.|,)',
         ]
@@ -66,7 +46,7 @@ class GSM8KEvaluator:
                 except:
                     continue
 
-        # 最后尝试：提取最后一个数字
+        # 
         numbers = re.findall(r'[-+]?\d*\.?\d+', text)
         if numbers:
             try:
@@ -76,13 +56,13 @@ class GSM8KEvaluator:
         return None
 
     def normalize_answer(self, answer):
-        """标准化答案（处理分数、百分数等）"""
+        """"""
         if isinstance(answer, (int, float)):
             return float(answer)
 
         text = str(answer).strip()
 
-        # 优先处理 GSM8K 的 #### 格式
+        #  GSM8K  #### 
         hash_match = re.search(r'####\s*([-+]?\d*\.?\d+)', text)
         if hash_match:
             try:
@@ -92,7 +72,7 @@ class GSM8KEvaluator:
 
         text = text.lower()
 
-        # 处理百分数
+        # 
         if '%' in text:
             text = text.replace('%', '').strip()
             try:
@@ -100,7 +80,7 @@ class GSM8KEvaluator:
             except:
                 pass
 
-        # 处理分数
+        # 
         frac_match = re.match(r'(\d+)\s*/\s*(\d+)', text)
         if frac_match:
             try:
@@ -108,7 +88,7 @@ class GSM8KEvaluator:
             except:
                 pass
 
-        # 提取数字（返回最后一个，通常是答案）
+        # 
         numbers = re.findall(r'[-+]?\d*\.?\d+', text)
         if numbers:
             try:
@@ -119,7 +99,7 @@ class GSM8KEvaluator:
         return None
 
     def evaluate(self, model, test_dataset, max_samples=None, max_new_tokens=256):
-        """评估 GSM8K"""
+        """ GSM8K"""
         correct = 0
         total = 0
         results = []
@@ -128,14 +108,14 @@ class GSM8KEvaluator:
         if max_samples and max_samples < len(indices):
             indices = indices[:max_samples]
 
-        print(f"\n[GSM8K] 评估 {len(indices)} 个样本...")
+        print(f"\n[GSM8K]  {len(indices)} ...")
 
         for idx in tqdm(indices, desc="GSM8K"):
             example = test_dataset[idx]
             question = example['question']
             true_answer = example['answer']
 
-            # 构造 prompt
+            #  prompt
             prompt = self.format_prompt(question)
             inputs = self.tokenizer(
                 prompt,
@@ -145,7 +125,7 @@ class GSM8KEvaluator:
                 max_length=512
             ).to(self.device)
 
-            # 生成答案
+            # 
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
@@ -156,15 +136,15 @@ class GSM8KEvaluator:
                 )
 
             generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            generated_answer = generated.split("解答：")[-1].strip() if "解答：" in generated else generated
+            generated_answer = generated.split("")[-1].strip() if "" in generated else generated
 
-            # 提取答案
+            # 
             pred = self.extract_answer(generated_answer)
             true = self.normalize_answer(true_answer)
 
             is_correct = False
             if pred is not None and true is not None:
-                # 允许小的浮点误差
+                # 
                 is_correct = abs(pred - true) < 1e-6 or abs(pred - true) / max(abs(true), 1) < 0.01
 
             if is_correct:
@@ -172,7 +152,7 @@ class GSM8KEvaluator:
             total += 1
 
             results.append({
-                'question': question[:100],  # 限制长度
+                'question': question[:100],  # 
                 'true_answer': str(true_answer)[:100],
                 'generated': generated_answer[:200],
                 'extracted_pred': pred,
@@ -186,12 +166,12 @@ class GSM8KEvaluator:
             'accuracy': accuracy,
             'correct': correct,
             'total': total,
-            'results': results[:10],  # 只保存前 10 个详细结果
+            'results': results[:10],  #  10 
         }
 
 
 class CMMLUEvaluator:
-    """CMMLU 中文知识评估"""
+    """CMMLU """
 
     def __init__(self, tokenizer, device):
         self.tokenizer = tokenizer
@@ -199,17 +179,17 @@ class CMMLUEvaluator:
         self.label_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
 
     def format_prompt(self, question, choices):
-        """格式化 prompt"""
-        prompt = f"问题：{question}\n"
+        """ prompt"""
+        prompt = f"{question}\n"
         prompt += f"A. {choices[0]}\n"
         prompt += f"B. {choices[1]}\n"
         prompt += f"C. {choices[2]}\n"
         prompt += f"D. {choices[3]}\n"
-        prompt += "答案："
+        prompt += ""
         return prompt
 
     def evaluate_likelihood(self, model, test_dataset, max_samples=None):
-        """使用似然方法评估（推荐，更准确）"""
+        """"""
         correct = 0
         total = 0
         results = []
@@ -218,7 +198,7 @@ class CMMLUEvaluator:
         if max_samples and max_samples < len(indices):
             indices = indices[:max_samples]
 
-        print(f"\n[CMMLU] 评估 {len(indices)} 个样本（似然法）...")
+        print(f"\n[CMMLU]  {len(indices)} ...")
 
         for idx in tqdm(indices, desc="CMMLU"):
             example = test_dataset[idx]
@@ -226,7 +206,7 @@ class CMMLUEvaluator:
             choices = [example['A'], example['B'], example['C'], example['D']]
             true_answer = example['Answer']
 
-            # 计算每个选项的似然
+            # 
             losses = []
             for choice in choices:
                 prompt = self.format_prompt(question, choices)
@@ -242,9 +222,9 @@ class CMMLUEvaluator:
 
                 with torch.no_grad():
                     outputs = model(**inputs, labels=inputs["input_ids"])
-                    # 负对数似然（越小越好）
+                    # 
                     loss = outputs.loss.item()
-                    losses.append(-loss)  # 转为正数（越大越好）
+                    losses.append(-loss)  # 
 
             predicted_idx = np.argmax(losses)
             predicted_label = ['A', 'B', 'C', 'D'][predicted_idx]
@@ -272,7 +252,7 @@ class CMMLUEvaluator:
         }
 
     def evaluate_generate(self, model, test_dataset, max_samples=None, max_new_tokens=32):
-        """使用生成方法评估（备选）"""
+        """"""
         correct = 0
         total = 0
         results = []
@@ -281,7 +261,7 @@ class CMMLUEvaluator:
         if max_samples and max_samples < len(indices):
             indices = indices[:max_samples]
 
-        print(f"\n[CMMLU] 评估 {len(indices)} 个样本（生成法）...")
+        print(f"\n[CMMLU]  {len(indices)} ...")
 
         for idx in tqdm(indices, desc="CMMLU"):
             example = test_dataset[idx]
@@ -307,17 +287,17 @@ class CMMLUEvaluator:
                 )
 
             generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            answer_part = generated.split("答案：")[-1].strip() if "答案：" in generated else generated
+            answer_part = generated.split("")[-1].strip() if "" in generated else generated
 
-            # 提取答案
+            # 
             predicted_label = None
             for label in ['A', 'B', 'C', 'D']:
-                if label in answer_part[:10]:  # 只看前几个字符
+                if label in answer_part[:10]:  # 
                     predicted_label = label
                     break
 
             if predicted_label is None:
-                # 尝试从首字符提取
+                # 
                 first_char = answer_part[0].upper() if answer_part else ''
                 if first_char in ['A', 'B', 'C', 'D']:
                     predicted_label = first_char
@@ -347,7 +327,7 @@ class CMMLUEvaluator:
 
 
 class MBPPEvaluator:
-    """MBPP 代码生成评估"""
+    """MBPP """
 
     def __init__(self, tokenizer, device):
         self.tokenizer = tokenizer
@@ -357,34 +337,34 @@ class MBPPEvaluator:
         return f"# Problem\n{problem_text}\n\n# Solution\n"
 
     def extract_code(self, generated):
-        """提取生成的代码"""
+        """"""
         if "# Solution\n" in generated:
             code = generated.split("# Solution\n")[-1].strip()
         else:
             code = generated.strip()
 
-        # 移除可能的额外注释
+        # 
         lines = []
         for line in code.split('\n'):
             line = line.strip()
             if line and not line.startswith('#'):
                 lines.append(line)
-            elif lines:  # 已有代码，遇到注释停止
+            elif lines:  # 
                 break
 
         return '\n'.join(lines)
 
     def execute_test_cases(self, code, test_list, timeout=5):
-        """执行测试用例"""
+        """"""
         import sys
         import io
         import contextlib
 
-        # 准备执行环境
+        # 
         test_code = code + '\n\n'
         test_code += '\n'.join(test_list)
 
-        # 捕获输出
+        # 
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
 
@@ -392,7 +372,7 @@ class MBPPEvaluator:
             exec_globals = {'__builtins__': __builtins__}
             exec(test_code, exec_globals)
 
-            # 检查是否有断言错误
+            # 
             output = sys.stdout.getvalue()
             success = True
 
@@ -406,7 +386,7 @@ class MBPPEvaluator:
         return success
 
     def evaluate(self, model, test_dataset, max_samples=None, max_new_tokens=256):
-        """评估 MBPP"""
+        """ MBPP"""
         correct = 0
         total = 0
         results = []
@@ -415,7 +395,7 @@ class MBPPEvaluator:
         if max_samples and max_samples < len(indices):
             indices = indices[:max_samples]
 
-        print(f"\n[MBPP] 评估 {len(indices)} 个样本...")
+        print(f"\n[MBPP]  {len(indices)} ...")
 
         for idx in tqdm(indices, desc="MBPP"):
             example = test_dataset[idx]
@@ -443,7 +423,7 @@ class MBPPEvaluator:
             generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             generated_code = self.extract_code(generated)
 
-            # 执行测试
+            # 
             passed = False
             if test_list:
                 try:
@@ -451,7 +431,7 @@ class MBPPEvaluator:
                 except Exception as e:
                     passed = False
             else:
-                # 没有测试用例，检查代码相似性
+                # 
                 passed = generated_code.strip() == true_code.strip()
 
             if passed:
@@ -475,30 +455,30 @@ class MBPPEvaluator:
 
 
 class ShareGPTEvaluator:
-    """ShareGPT 对话评估"""
+    """ShareGPT """
 
     def __init__(self, tokenizer, device):
         self.tokenizer = tokenizer
         self.device = device
 
     def format_conversation(self, conversations):
-        """格式化对话
+        """
 
-        ShareGPT 数据在不同来源/预处理后可能出现多种结构：
-        - str: 已经拼接好的全文
-        - list[dict]: {from,value} 或 {role,content}
-        - list[str]: 每行一句
-        - 其他/混合：尽量降级为可用文本
+        ShareGPT /
+        - str: 
+        - list[dict]: {from,value}  {role,content}
+        - list[str]: 
+        - /
         """
 
         if conversations is None:
             return ""
 
-        # 有些数据集直接把 conversations 存成一整段字符串
+        #  conversations 
         if isinstance(conversations, str):
             return conversations.strip()
 
-        # 有些数据集是 dict（例如单轮对话）
+        #  dict
         if isinstance(conversations, dict):
             conversations = [conversations]
 
@@ -525,7 +505,7 @@ class ShareGPTEvaluator:
                     lines.append(f"{role}: {content}")
                 continue
 
-            # 兜底：未知类型
+            # 
             s = str(turn).strip()
             if s:
                 lines.append(s)
@@ -533,7 +513,7 @@ class ShareGPTEvaluator:
         return "\n".join(lines).strip()
 
     def compute_perplexity(self, model, test_dataset, max_samples=None, max_length=512):
-        """计算 Perplexity"""
+        """ Perplexity"""
         total_loss = 0
         total_tokens = 0
         results = []
@@ -542,7 +522,7 @@ class ShareGPTEvaluator:
         if max_samples and max_samples < len(indices):
             indices = indices[:max_samples]
 
-        print(f"\n[ShareGPT] 计算 {len(indices)} 个样本的 Perplexity...")
+        print(f"\n[ShareGPT]  {len(indices)}  Perplexity...")
 
         for idx in tqdm(indices, desc="ShareGPT"):
             example = test_dataset[idx]
@@ -588,7 +568,7 @@ def load_sharegpt_conversations_dataset(path: str):
     def norm_turn(t):
         if not isinstance(t, dict):
             return None
-        # 常见两种格式：{"from","value"} 或 {"role","content"}
+        # {"from","value"}  {"role","content"}
         speaker = t.get("from", t.get("role", "unknown"))
         content = t.get("value", t.get("content", t.get("text", "")))
         if content is None:
@@ -616,7 +596,7 @@ def load_sharegpt_conversations_dataset(path: str):
     skipped = 0
 
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        # 既兼容 JSONL，也兼容一个大的 JSON 数组
+        #  JSONL JSON 
         first_nonspace = ""
         pos = f.tell()
         for line in f:
@@ -662,50 +642,49 @@ def load_sharegpt_conversations_dataset(path: str):
     ds = Dataset.from_list(records, features=features)
 
     if skipped:
-        print(f"[ShareGPT] ⚠️ 跳过无效样本: {skipped}")
+        print(f"[ShareGPT]  : {skipped}")
     return ds
 
-# ==================== 主函数 ====================
 def main():
-    parser = argparse.ArgumentParser(description="下游任务评估脚本")
+    parser = argparse.ArgumentParser(description="")
 
-    # 模型配置
+    # 
     parser.add_argument("--model_path", type=str, required=True,
-                       help="训练好的模型路径")
+                       help="")
     parser.add_argument("--base_model", type=str,
                        default="/opt/pangu/openPangu-Embedded-7B-V1.1",
-                       help="基础模型路径（用于 LoRA）")
+                       help=" LoRA")
 
-    # 数据集配置
+    # 
     parser.add_argument("--dataset", type=str, required=True,
                        choices=['gsm8k', 'cmmlu', 'sharegpt', 'mbpp'],
-                       help="数据集名称")
+                       help="")
     parser.add_argument("--dataset_path", type=str, default=None,
-                       help="数据集路径（覆盖默认路径）")
+                       help="")
     parser.add_argument("--num_samples", type=int, default=None,
-                       help="评估样本数（None=全部）")
+                       help="None=")
 
-    # 生成配置
+    # 
     parser.add_argument("--max_new_tokens", type=int, default=256,
-                       help="最大生成 token 数")
+                       help=" token ")
     parser.add_argument("--eval_method", type=str, default='auto',
                        choices=['auto', 'likelihood', 'generate'],
-                       help="CMMLU 评估方法")
+                       help="CMMLU ")
 
-    # 输出配置
+    # 
     parser.add_argument("--output_dir", type=str, default=None,
-                       help="输出目录（默认为模型路径下的 evaluation）")
+                       help=" evaluation")
     parser.add_argument("--save_details", action="store_true",
-                       help="保存详细结果")
+                       help="")
 
-    # 其他
+    # 
     parser.add_argument("--device", type=str, default="npu:1")
     parser.add_argument("--batch_size", type=int, default=1,
-                       help="批大小（目前只支持 1）")
+                       help=" 1")
 
     args = parser.parse_args()
 
-    # 设置设备
+    # 
     device = torch.device(args.device)
     device_type = args.device.split(':')[0]
 
@@ -713,25 +692,25 @@ def main():
         try:
             import torch_npu
             torch_npu.npu.set_device(device)
-            print(f"[设备] ✓ NPU 初始化成功: {device}\n")
+            print(f"[]  NPU : {device}\n")
         except Exception as e:
-            print(f"[设备] ❌ NPU 初始化失败: {e}")
+            print(f"[]  NPU : {e}")
             return
     else:
-        print(f"[设备] 使用: {device}\n")
+        print(f"[] : {device}\n")
 
-    # 获取数据集路径
+    # 
     dataset_path = args.dataset_path or DATASET_PATHS.get(args.dataset)
     if not dataset_path:
-        print(f"❌ 未找到数据集路径: {args.dataset}")
+        print(f" : {args.dataset}")
         return
 
-    # 加载 tokenizer
+    #  tokenizer
     print("="*70)
-    print("📦 加载模型")
+    print(" ")
     print("="*70)
 
-    print(f"[模型] 路径: {args.model_path}")
+    print(f"[] : {args.model_path}")
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.base_model if os.path.exists(os.path.join(args.model_path, 'adapter_config.json')) else args.model_path,
@@ -742,106 +721,106 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    print(f"[模型] ✓ Tokenizer 加载成功")
+    print(f"[]  Tokenizer ")
 
-        # 加载模型
-    print(f"[模型] 路径: {args.model_path}")
+        # 
+    print(f"[] : {args.model_path}")
     
-    # 检查是否是 LoRA 模型
+    #  LoRA 
     adapter_config_path = os.path.join(args.model_path, 'adapter_config.json')
     
     if os.path.exists(adapter_config_path):
-        # ⚡⚡⚡ LoRA 模型加载（NPU 兼容版本）⚡⚡⚡
+        #  LoRA NPU 
         from peft import PeftModel, PeftConfig
         import json
         
-        print(f"[模型] 检测到 LoRA 模型")
+        print(f"[]  LoRA ")
         
-        # ⚡⚡⚡ 方案1: 修改 adapter_config.json 临时禁用 safetensors ⚡⚡⚡
+        #  1:  adapter_config.json  safetensors 
         with open(adapter_config_path, 'r') as f:
             adapter_config = json.load(f)
         
-        # 检查是否有 safetensors 文件
+        #  safetensors 
         safetensors_file = os.path.join(args.model_path, 'adapter_model.safetensors')
         pytorch_file = os.path.join(args.model_path, 'adapter_model.bin')
         
         if os.path.exists(safetensors_file) and not os.path.exists(pytorch_file):
-            # 转换 safetensors 为 PyTorch 格式
-            print(f"[模型] 检测到 safetensors 格式，正在转换为 PyTorch 格式...")
+            #  safetensors  PyTorch 
+            print(f"[]  safetensors  PyTorch ...")
             
             try:
                 from safetensors.torch import load_file
                 
-                # 强制在 CPU 上加载
+                #  CPU 
                 state_dict = load_file(safetensors_file, device='cpu')
                 
-                # 保存为 PyTorch 格式
+                #  PyTorch 
                 torch.save(state_dict, pytorch_file)
-                print(f"[模型] ✓ 已转换为 PyTorch 格式: {pytorch_file}")
+                print(f"[]   PyTorch : {pytorch_file}")
                 
             except Exception as e:
-                print(f"[模型] ⚠️ 转换失败: {e}")
-                print(f"[模型] 尝试使用备用加载方案...")
+                print(f"[]  : {e}")
+                print(f"[] ...")
         
-        # 加载基础模型
-        print(f"[模型] 加载基础模型: {args.base_model}")
+        # 
+        print(f"[] : {args.base_model}")
         base_model = AutoModelForCausalLM.from_pretrained(
             args.base_model,
             trust_remote_code=True,
             torch_dtype=torch.float16,
-            device_map='cpu'  # ⚡ 先在 CPU 上加载
+            device_map='cpu'  #   CPU 
         )
         
-        # 加载 LoRA adapter（优先使用 PyTorch 格式）
-        print(f"[模型] 加载 LoRA adapter: {args.model_path}")
+        #  LoRA adapter PyTorch 
+        print(f"[]  LoRA adapter: {args.model_path}")
         
         try:
-            # ⚡⚡⚡ 核心修复：设置环境变量禁用 safetensors ⚡⚡⚡
-            os.environ['PEFT_USE_SAFETENSORS'] = '0'  # 禁用 safetensors
+            #   safetensors 
+            os.environ['PEFT_USE_SAFETENSORS'] = '0'  #  safetensors
             
             model = PeftModel.from_pretrained(
                 base_model,
                 args.model_path,
-                device_map='cpu'  # ⚡ 先在 CPU 上加载
+                device_map='cpu'  #   CPU 
             )
             
-            print(f"[模型] ✓ LoRA 模型加载成功")
+            print(f"[]  LoRA ")
         
         except Exception as e:
-            print(f"[模型] ❌ LoRA 加载失败: {e}")
+            print(f"[]  LoRA : {e}")
             
-            # ⚡⚡⚡ 备用方案：手动加载权重 ⚡⚡⚡
-            print(f"[模型] 尝试手动加载权重...")
+            #   
+            print(f"[] ...")
             
             if os.path.exists(pytorch_file):
                 state_dict = torch.load(pytorch_file, map_location='cpu')
                 base_model.load_state_dict(state_dict, strict=False)
                 model = base_model
-                print(f"[模型] ✓ 手动加载成功")
+                print(f"[]  ")
             else:
-                raise RuntimeError(f"无法加载 LoRA 权重，请检查模型文件")
+                raise RuntimeError(f" LoRA ")
     
     else:
-        # ⚡⚡⚡ 完整模型加载 ⚡⚡⚡
-        print(f"[模型] 加载完整模型: {args.model_path}")
+        #   
+        print(f"[] : {args.model_path}")
         model = AutoModelForCausalLM.from_pretrained(
             args.model_path,
             trust_remote_code=True,
             torch_dtype=torch.float16,
-            device_map='cpu'  # ⚡ 先在 CPU 上加载
+            device_map='cpu'  #   CPU 
         )
-        print(f"[模型] ✓ 完整模型加载成功")
+        print(f"[]  ")
     
-    # ⚡⚡⚡ 统一移动到 NPU 设备 ⚡⚡⚡
-    print(f"[模型] 移动模型到设备: {device}")
+    #   NPU  
+    print(f"[] : {device}")
     model = model.to(device)
     model.eval()
     
-    print(f"[模型] ✓ 模型已就绪\n")
+    print(f"[]  \n")
 
-    # 加载数据集
+    # 
     print("="*70)
-    print(f"📊 加载数据集 ({args.dataset.upper()})")
+    print(f"  ({args.dataset.upper()})")
     print("="*70)
 
     try:
@@ -850,7 +829,7 @@ def main():
         if os.path.isdir(dataset_path):
             dataset = load_from_disk(dataset_path)
 
-            # load_from_disk 可能返回 DatasetDict 或 Dataset
+            # load_from_disk  DatasetDict  Dataset
             if isinstance(dataset, dict) or hasattr(dataset, "keys"):
                 if 'test' in dataset:
                     test_dataset = dataset['test']
@@ -859,7 +838,7 @@ def main():
                 else:
                     test_dataset = dataset['train']
             else:
-                test_dataset = dataset  # 直接是 Dataset
+                test_dataset = dataset  #  Dataset
 
         elif os.path.isfile(dataset_path):
             ext = os.path.splitext(dataset_path)[1].lower()
@@ -869,27 +848,27 @@ def main():
                 else:
                     test_dataset = load_dataset("json", data_files=dataset_path, split="train")
             else:
-                raise ValueError(f"不支持的文件类型: {dataset_path}")
+                raise ValueError(f": {dataset_path}")
         else:
-            raise FileNotFoundError(f"数据集路径不存在: {dataset_path}")
+            raise FileNotFoundError(f": {dataset_path}")
 
-        print(f"[数据] ✓ 加载成功: {len(test_dataset)} 样本")
+        print(f"[]  : {len(test_dataset)} ")
 
         if args.num_samples and args.num_samples < len(test_dataset):
-            print(f"[数据] 限制评估: {args.num_samples} 样本")
+            print(f"[] : {args.num_samples} ")
 
         print()
 
 
     except Exception as e:
-        print(f"[数据] ❌ 加载失败: {e}")
+        print(f"[]  : {e}")
         import traceback
         traceback.print_exc()
         return
 
-    # 评估
+    # 
     print("="*70)
-    print(f"🎯 开始评估 ({args.dataset.upper()})")
+    print(f"  ({args.dataset.upper()})")
     print("="*70)
 
     start_time = time.time()
@@ -903,15 +882,15 @@ def main():
             max_new_tokens=args.max_new_tokens
         )
         metrics['accuracy'] = result['accuracy']
-        print(f"\n[GSM8K] 准确率: {result['accuracy']:.2%} ({result['correct']}/{result['total']})")
+        print(f"\n[GSM8K] : {result['accuracy']:.2%} ({result['correct']}/{result['total']})")
 
     elif args.dataset == 'cmmlu':
         evaluator = CMMLUEvaluator(tokenizer, device)
 
-        # 选择评估方法
+        # 
         method = args.eval_method
         if method == 'auto':
-            method = 'likelihood'  # 默认使用似然法
+            method = 'likelihood'  # 
 
         if method == 'likelihood':
             result = evaluator.evaluate_likelihood(model, test_dataset, max_samples=args.num_samples)
@@ -923,7 +902,7 @@ def main():
             )
 
         metrics['accuracy'] = result['accuracy']
-        print(f"\n[CMMLU] 准确率: {result['accuracy']:.2%} ({result['correct']}/{result['total']})")
+        print(f"\n[CMMLU] : {result['accuracy']:.2%} ({result['correct']}/{result['total']})")
 
     elif args.dataset == 'mbpp':
         evaluator = MBPPEvaluator(tokenizer, device)
@@ -933,7 +912,7 @@ def main():
             max_new_tokens=args.max_new_tokens
         )
         metrics['pass_rate'] = result['pass_rate']
-        print(f"\n[MBPP] 通过率: {result['pass_rate']:.2%} ({result['correct']}/{result['total']})")
+        print(f"\n[MBPP] : {result['pass_rate']:.2%} ({result['correct']}/{result['total']})")
 
     elif args.dataset == 'sharegpt':
         evaluator = ShareGPTEvaluator(tokenizer, device)
@@ -941,19 +920,19 @@ def main():
         metrics['perplexity'] = result['perplexity']
         metrics['avg_loss'] = result['avg_loss']
         print(f"\n[ShareGPT] Perplexity: {result['perplexity']:.2f}")
-        print(f"[ShareGPT] 平均损失: {result['avg_loss']:.4f}")
+        print(f"[ShareGPT] : {result['avg_loss']:.4f}")
 
     eval_time = time.time() - start_time
 
-    # 保存结果
+    # 
     print("="*70)
-    print("💾 保存结果")
+    print(" ")
     print("="*70)
 
     output_dir = args.output_dir or os.path.join(args.model_path, 'evaluation')
     os.makedirs(output_dir, exist_ok=True)
 
-    # 保存指标
+    # 
     summary = {
         'dataset': args.dataset,
         'model_path': args.model_path,
@@ -967,22 +946,22 @@ def main():
     summary_file = os.path.join(output_dir, f"{args.dataset}_summary.json")
     with open(summary_file, 'w') as f:
         json.dump(summary, f, indent=2)
-    print(f"[保存] ✓ 指标汇总: {summary_file}")
+    print(f"[]  : {summary_file}")
 
-    # 保存详细结果
+    # 
     if args.save_details and 'results' in result:
         details_file = os.path.join(output_dir, f"{args.dataset}_details.json")
         with open(details_file, 'w') as f:
             json.dump(result['results'], f, indent=2, ensure_ascii=False)
-        print(f"[保存] ✓ 详细结果: {details_file}")
+        print(f"[]  : {details_file}")
 
     print()
     print("="*70)
-    print("🎉 评估完成!")
+    print(" !")
     print("="*70)
-    print(f"\n数据集: {args.dataset.upper()}")
-    print(f"评估时间: {eval_time:.2f} 秒")
-    print(f"\n📊 结果:")
+    print(f"\n: {args.dataset.upper()}")
+    print(f": {eval_time:.2f} ")
+    print(f"\n :")
     for key, value in metrics.items():
         if isinstance(value, float):
             if key in ['accuracy', 'pass_rate']:
@@ -991,7 +970,7 @@ def main():
                 print(f"  • {key}: {value:.4f}")
         else:
             print(f"  • {key}: {value}")
-    print(f"\n💾 输出目录: {output_dir}")
+    print(f"\n : {output_dir}")
     print("="*70)
 
 

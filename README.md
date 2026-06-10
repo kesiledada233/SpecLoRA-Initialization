@@ -36,9 +36,9 @@ speclora-repo/
 │   └── measure.py         # Spectral analysis tools
 ├── experiments/           # Main experiments
 │   ├── train_benchmark_fdt_init.py
-│   ├── train_deepseek_fda_lora_final.py
-│   ├── train_openpangu_fda_lora_final.py
-│   ├── train_qwen2.5_fda_lora_final.py
+│   ├── train_deepseek_fdt_lora_final.py
+│   ├── train_openpangu_fdt_lora_final.py
+│   ├── train_qwen2.5_fdt_lora_final.py
 │   ├── train_sharegpt_fdt_init.py
 │   ├── train_wikitext_fdt_init.py
 │   ├── evaluate_downstream.py
@@ -55,8 +55,10 @@ speclora-repo/
 │   └── collect_all_results.py
 ├── tests/                 # Unit tests
 │   ├── test_multi_init.py
-│   ├── test_fdt_initialization.py
-│   └── init_test.py
+│   └── test_fdt_initialization.py
+├── results/               # Key experimental results
+│   ├── all_experiments_results.csv
+│   └── time_to_threshold_results.json
 ├── data/                  # Data directory (populate via README links)
 ├── requirements.txt
 └── README.md
@@ -71,13 +73,13 @@ speclora-repo/
 bash experiments/run_mistral.sh
 
 # DeepSeek
-python experiments/train_deepseek_fda_lora_final.py
+python experiments/train_deepseek_fdt_lora_final.py
 
 # OpenPangu
-python experiments/train_openpangu_fda_lora_final.py
+python experiments/train_openpangu_fdt_lora_final.py
 
 # Qwen2.5
-python experiments/train_qwen2.5_fda_lora_final.py
+python experiments/train_qwen2.5_fdt_lora_final.py
 ```
 
 ### Downstream Evaluation

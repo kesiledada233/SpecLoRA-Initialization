@@ -173,7 +173,7 @@ def plot_4dataset_training_curves(max_steps: int = 500, smooth_window: int = 20)
             losses_file = os.path.join(exp_dir, "training_losses.npy")
 
             if not os.path.exists(losses_file):
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
                 continue
 
             losses = np.load(losses_file)
@@ -222,7 +222,7 @@ def plot_4dataset_training_curves(max_steps: int = 500, smooth_window: int = 20)
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ 图 1: 4 数据集训练曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f"  1: 4  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -267,12 +267,12 @@ def plot_alpha_sweep_for_dataset(
                 alpha=0.95,
             )
         else:
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
 
     # Alpha experiments (only selected alpha points)
     alpha_exps_all = _discover_alpha_experiments(dataset)
     if not alpha_exps_all:
-        print(f"⚠️  未找到 alpha 实验目录: outputs_{dataset}/alpha*")
+        print(f"   alpha : outputs_{dataset}/alpha*")
 
     selected_alphas = [0.6, 0.8, 1.0, 1.4]
     alpha_exps: list[tuple[float, str]] = []
@@ -285,7 +285,7 @@ def plot_alpha_sweep_for_dataset(
     missing = [a for a in selected_alphas if round(a, 6) not in present]
     if missing:
         missing_str = ", ".join(f"{a:g}" for a in missing)
-        print(f"⚠️  {dataset}: 缺少指定 alpha 目录: {missing_str}")
+        print(f"  {dataset}:  alpha : {missing_str}")
 
     # Use a qualitative palette with good separability (baseline red is fixed)
     tab10 = sns.color_palette("tab10", n_colors=10)
@@ -309,7 +309,7 @@ def plot_alpha_sweep_for_dataset(
 
         losses_file = os.path.join(exp_dir, "training_losses.npy")
         if not os.path.exists(losses_file):
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
             continue
 
         losses = np.load(losses_file)
@@ -342,7 +342,7 @@ def plot_alpha_sweep_for_dataset(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ {dataset} alpha 曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" {dataset} alpha  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -402,12 +402,12 @@ def plot_alpha_sweep_triptych(
                     alpha=0.95,
                 )
             else:
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
 
         # Alpha experiments (only selected alpha points)
         alpha_exps_all = _discover_alpha_experiments(dataset)
         if not alpha_exps_all:
-            print(f"⚠️  未找到 alpha 实验目录: outputs_{dataset}/alpha*")
+            print(f"   alpha : outputs_{dataset}/alpha*")
 
         alpha_exps: list[tuple[float, str]] = []
         for alpha_value, exp_dir in alpha_exps_all:
@@ -418,7 +418,7 @@ def plot_alpha_sweep_triptych(
         missing = [a for a in selected_alphas if round(a, 6) not in present]
         if missing:
             missing_str = ", ".join(f"{a:g}" for a in missing)
-            print(f"⚠️  {dataset}: 缺少指定 alpha 目录: {missing_str}")
+            print(f"  {dataset}:  alpha : {missing_str}")
 
         for (alpha_value, exp_dir) in alpha_exps:
             # pick mapped color; fallback to a neutral tab color if unexpected
@@ -432,7 +432,7 @@ def plot_alpha_sweep_triptych(
 
             losses_file = os.path.join(exp_dir, "training_losses.npy")
             if not os.path.exists(losses_file):
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
                 continue
 
             losses = np.load(losses_file)
@@ -478,7 +478,7 @@ def plot_alpha_sweep_triptych(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ alpha 曲线（{', '.join(datasets)}）→ {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" alpha {', '.join(datasets)}→ {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -549,7 +549,7 @@ def plot_lora_rank_sweep_for_dataset(
                 alpha=0.95,
             )
         else:
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
 
     ranks = [8, 16, 32, 64]
     rank_map: dict[int, str] = {
@@ -571,7 +571,7 @@ def plot_lora_rank_sweep_for_dataset(
         exp_dir = rank_map[rank]
         losses_file = _pick_losses_file_from_experiment_dir(exp_dir)
         if not losses_file:
-            print(f"⚠️  未找到 {dataset} rank={rank} 的 training_losses.npy: {exp_dir}")
+            print(f"   {dataset} rank={rank}  training_losses.npy: {exp_dir}")
             continue
 
         losses = np.load(losses_file)
@@ -602,7 +602,7 @@ def plot_lora_rank_sweep_for_dataset(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ {dataset} LoRA rank 曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" {dataset} LoRA rank  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -661,7 +661,7 @@ def plot_lora_rank_sweep_triptych(
                     alpha=0.95,
                 )
             else:
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
 
         rank_map: dict[int, str] = {
             16: f"outputs_{dataset}/alpha0.6",
@@ -674,7 +674,7 @@ def plot_lora_rank_sweep_triptych(
             exp_dir = rank_map[rank]
             losses_file = _pick_losses_file_from_experiment_dir(exp_dir)
             if not losses_file:
-                print(f"⚠️  未找到 {dataset} rank={rank} 的 training_losses.npy: {exp_dir}")
+                print(f"   {dataset} rank={rank}  training_losses.npy: {exp_dir}")
                 continue
 
             losses = np.load(losses_file)
@@ -718,35 +718,35 @@ def plot_lora_rank_sweep_triptych(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ LoRA rank 曲线（{', '.join(datasets)}）→ {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" LoRA rank {', '.join(datasets)}→ {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
 def main() -> None:
     print("=" * 70)
-    print("📊 生成 ablation 绘图")
+    print("  ablation ")
     print("=" * 70)
     print()
-    print("输出目录:", OUTPUT_DIR)
+    print(":", OUTPUT_DIR)
     print()
 
-    # 1) 按需求：去除“第一个子图/第一部分”的绘制（不再生成图 1）
+    # 1) “/” 1
 
-    # 2) 第二部分：alpha sweep
-    # - cmmlu 保持单图
-    # - gsm8k/sharegpt/mbpp 合并为 1×3
+    # 2) alpha sweep
+    # - cmmlu 
+    # - gsm8k/sharegpt/mbpp  1×3
     plot_alpha_sweep_for_dataset("cmmlu")
     plot_alpha_sweep_triptych(["gsm8k", "sharegpt", "mbpp"])
 
-    # 3) 第三部分：LoRA rank sweep
-    # - cmmlu 保持单图（已给出）
-    # - gsm8k/sharegpt/mbpp 合并为 1×3
+    # 3) LoRA rank sweep
+    # - cmmlu 
+    # - gsm8k/sharegpt/mbpp  1×3
     plot_cmmlu_lora_rank_sweep()
     plot_lora_rank_sweep_triptych(["gsm8k", "sharegpt", "mbpp"])
 
     print()
     print("=" * 70)
-    print("✅ 生成完成!")
+    print(" !")
     print("=" * 70)
 
 

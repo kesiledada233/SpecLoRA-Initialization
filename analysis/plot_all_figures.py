@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-生成论文所需的所有图表（4 数据集完整版）
-- GSM8K: 数学推理
-- CMMLU: 中文知识
-- ShareGPT: 对话交互
-- MBPP: 代码生成
+4 
+- GSM8K: 
+- CMMLU: 
+- ShareGPT: 
+- MBPP: 
 """
 
 import os
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-# 论文级别绘图风格
+# 
 plt.style.use('seaborn-v0_8-paper')
 sns.set_palette("husl")
 
@@ -38,15 +38,13 @@ plt.rcParams.update({
 OUTPUT_DIR = "paper_figures"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ============================================================================
-# 实验目录映射（4 个数据集 × 2 方法 + GSM8K 消融）
-# ============================================================================
+# 4  × 2  + GSM8K 
 EXPERIMENTS = {
-    # GSM8K（完整消融）
+    # GSM8K
     'gsm8k': {
         'baseline': 'outputs_gsm8k/baseline',
         'fdt': 'outputs_gsm8k/alpha0.6',
-        # 消融实验
+        # 
         # 'alpha06': 'outputs_gsm8k_ablation_alpha0.6_r16',
         # 'alpha08': 'outputs_gsm8k_ablation_alpha0.8_r16',
         # 'alpha09': 'outputs_gsm8k_ablation_alpha0.9_r16',
@@ -77,17 +75,15 @@ EXPERIMENTS = {
 }
 
 
-# ============================================================================
-# 图 1: 4 数据集训练曲线（1×4 子图）
-# ============================================================================
+#  1: 4 1×4 
 def plot_4dataset_training_curves():
     """
-    4 个数据集的训练曲线对比
-    每个数据集一个子图（Baseline vs FDT）
-    图1：改为 1×4 横向排布，并将标题放在子图下方
+    4 
+    Baseline vs FDT
+    1 1×4 
     """
 
-    # 1×4 横排
+    # 1×4 
     fig, axes = plt.subplots(1, 4, figsize=(12, 3), sharey=True)
 
     datasets = ['gsm8k', 'cmmlu', 'sharegpt', 'mbpp']
@@ -108,7 +104,7 @@ def plot_4dataset_training_curves():
             losses_file = os.path.join(exp_dir, "training_losses.npy")
 
             if not os.path.exists(losses_file):
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
                 continue
 
             losses = np.load(losses_file)
@@ -129,12 +125,12 @@ def plot_4dataset_training_curves():
                 alpha=0.9
             )
 
-        # 装饰
+        # 
         ax.set_xlabel('Training Steps', fontsize=9)
         if idx == 0:
             ax.set_ylabel('Training Loss', fontsize=9)
 
-        # 标题放到子图下方（替代 ax.set_title）
+        #  ax.set_title
         ax.text(
             0.5, -0.28,
             f'({chr(97 + idx)}) {dataset_names[dataset]}',
@@ -149,23 +145,21 @@ def plot_4dataset_training_curves():
         ax.grid(True, alpha=0.3, linestyle='--')
         ax.set_xlim(0, 500)
 
-    # 给“下方标题”留出空间，避免被裁剪
+    # “”
     fig.subplots_adjust(bottom=0.28, wspace=0.25)
 
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig1_4dataset_curves.{fmt}", format=fmt)
 
-    print(f"✓ 图 1: 4 数据集训练曲线 → {OUTPUT_DIR}/fig1_4dataset_curves.pdf")
+    print(f"  1: 4  → {OUTPUT_DIR}/fig1_4dataset_curves.pdf")
     plt.close()
 
-# ============================================================================
-# 附加图 B: Step-AUC 曲线
-# ============================================================================
+#  B: Step-AUC 
 def plot_step_auc_curves():
-    """Step-AUC 曲线
+    """Step-AUC 
 
-    对每个数据集、每种方法绘制 AUC(0–t) 随步数 t 的变化曲线，
-    使用平滑后的 loss 做前缀和近似，重点关注前 500 步。
+     AUC(0–t)  t 
+     loss  500 
     """
 
     fig, axes = plt.subplots(2, 2, figsize=(8, 6))
@@ -189,13 +183,13 @@ def plot_step_auc_curves():
             losses_file = os.path.join(exp_dir, "training_losses.npy")
 
             if not os.path.exists(losses_file):
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
                 continue
 
             losses = np.load(losses_file)
             steps = np.arange(1, len(losses) + 1)
 
-            # 平滑
+            # 
             window = 20
             if len(losses) < window:
                 losses_smooth = losses
@@ -204,12 +198,12 @@ def plot_step_auc_curves():
                 losses_smooth = np.convolve(losses, np.ones(window)/window, mode='valid')
                 steps_smooth = steps[:len(losses_smooth)]
 
-            # 限制到前 500 步
+            #  500 
             mask = steps_smooth <= 500
             steps_smooth = steps_smooth[mask]
             losses_smooth = losses_smooth[mask]
 
-            # Step-AUC: 前缀和
+            # Step-AUC: 
             auc_curve = np.cumsum(losses_smooth)
 
             ax.plot(
@@ -233,17 +227,15 @@ def plot_step_auc_curves():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig1b_step_auc_curves.{fmt}", format=fmt)
 
-    print(f"✓ 附加图 B: Step-AUC 曲线 → {OUTPUT_DIR}/fig1b_step_auc_curves.pdf")
+    print(f"  B: Step-AUC  → {OUTPUT_DIR}/fig1b_step_auc_curves.pdf")
     plt.close()
 
 
-# ============================================================================
-# 图 2: 跨数据集 AUC 条形图
-# ============================================================================
+#  2:  AUC 
 def plot_cross_dataset_auc():
     """
-    AUC(0-500) 跨数据集对比
-    - 4 个数据集
+    AUC(0-500) 
+    - 4 
     - Baseline vs FDT
     """
     
@@ -264,7 +256,7 @@ def plot_cross_dataset_auc():
             baseline_values.append(data.get('auc_500', 0))
         else:
             baseline_values.append(0)
-            print(f"⚠️  未找到: {baseline_file}")
+            print(f"  : {baseline_file}")
         
         # FDT
         fdt_dir = EXPERIMENTS[dataset]['fdt']
@@ -276,18 +268,18 @@ def plot_cross_dataset_auc():
             fdt_values.append(data.get('auc_500', 0))
         else:
             fdt_values.append(0)
-            print(f"⚠️  未找到: {fdt_file}")
+            print(f"  : {fdt_file}")
     
-    # 计算改进百分比
+    # 
     improvements = [(b - f) / b * 100 if b > 0 else 0 for b, f in zip(baseline_values, fdt_values)]
     
-    # 绘图
+    # 
     fig, ax = plt.subplots(figsize=(7.5, 4.0))
 
     x = np.arange(len(datasets))
     width = 0.36
 
-    # 更柔和的配色与边框
+    # 
     bars1 = ax.bar(
         x - width/2,
         baseline_values,
@@ -308,12 +300,12 @@ def plot_cross_dataset_auc():
         linewidth=0.8,
     )
 
-    # 动态设置 y 轴上限，避免标注溢出
+    #  y 
     max_height = max([b.get_height() for b in list(bars1) + list(bars2)] + [1])
     ylim_top = max_height * 1.3
     ax.set_ylim(0, ylim_top)
 
-    # 标注改进百分比，靠上居中但不顶到边缘
+    # 
     for i, (bar1, bar2, imp) in enumerate(zip(bars1, bars2, improvements)):
         height = max(bar1.get_height(), bar2.get_height())
         text_y = height + max_height * 0.06
@@ -329,14 +321,14 @@ def plot_cross_dataset_auc():
             color='#27AE60',
         )
 
-    # 装饰
+    # 
     ax.set_xlabel('Dataset', fontweight='bold')
     ax.set_ylabel('AUC(0-500) ↓', fontweight='bold')
     ax.set_title('Convergence Speed Across Datasets (Lower is Better)', fontsize=11, pad=8)
     ax.set_xticks(x)
     ax.set_xticklabels(dataset_labels, fontsize=9)
 
-    # 去掉顶部和右侧边框，让图更干净
+    # 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -348,25 +340,23 @@ def plot_cross_dataset_auc():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig2_cross_dataset_auc.{fmt}", format=fmt)
     
-    print(f"✓ 图 2: 跨数据集 AUC → {OUTPUT_DIR}/fig2_cross_dataset_auc.pdf")
+    print(f"  2:  AUC → {OUTPUT_DIR}/fig2_cross_dataset_auc.pdf")
     plt.close()
 
 
-# ============================================================================
-# 图 3: GSM8K 消融热图（α vs 秩）
-# ============================================================================
+#  3: GSM8K α vs 
 def plot_gsm8k_ablation_heatmap():
     """
-    GSM8K 消融实验热图
-    - 行: α 值 [0.6, 0.8, 0.9, 1.1, 1.5]
-    - 列: LoRA 秩 [8, 16, 32]
+    GSM8K 
+    - : α  [0.6, 0.8, 0.9, 1.1, 1.5]
+    - : LoRA  [8, 16, 32]
     """
     
     alphas = [0.6, 0.8, 0.9, 1.1, 1.5]
     ranks = [8, 16, 32]
     
     exp_map = {
-        # 注意：EXPERIMENTS 中的键名是 alpha06/08/09/15
+        # EXPERIMENTS  alpha06/08/09/15
         (0.6, 16): EXPERIMENTS['gsm8k']['alpha06'],
         (0.8, 16): EXPERIMENTS['gsm8k']['alpha08'],
         (0.9, 16): EXPERIMENTS['gsm8k']['alpha09'],
@@ -394,13 +384,13 @@ def plot_gsm8k_ablation_heatmap():
             matrix[i, j] = auc
 
     if np.all(np.isnan(matrix)):
-        print("⚠️  GSM8K 消融热图: 所有 AUC 数值缺失，跳过绘制")
+        print("  GSM8K :  AUC ")
         return
 
     vmin = np.nanmin(matrix)
     vmax = np.nanmax(matrix)
 
-    # 构造 DataFrame 便于使用 seaborn 热图
+    #  DataFrame  seaborn 
     df = pd.DataFrame(
         matrix,
         index=[f"α={a}" for a in alphas],
@@ -409,7 +399,7 @@ def plot_gsm8k_ablation_heatmap():
 
     fig, ax = plt.subplots(figsize=(5.6, 4.2))
 
-    # 使用较柔和的反色调色板，并对 NaN 做掩码
+    #  NaN 
     cmap = sns.color_palette("RdYlGn_r", as_cmap=True)
 
     sns.heatmap(
@@ -430,7 +420,7 @@ def plot_gsm8k_ablation_heatmap():
     ax.set_ylabel('FDT Alpha (α)', fontweight='bold')
     ax.set_title('GSM8K Ablation Study: AUC(0-500)', fontsize=11, pad=8)
 
-    # 调整色条标签样式，避免与图像重叠
+    # 
     cbar = ax.collections[0].colorbar
     cbar.ax.yaxis.label.set_fontsize(10)
     cbar.ax.yaxis.label.set_fontweight('bold')
@@ -440,29 +430,27 @@ def plot_gsm8k_ablation_heatmap():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig3_gsm8k_ablation.{fmt}", format=fmt)
     
-    print(f"✓ 图 3: GSM8K 消融热图 → {OUTPUT_DIR}/fig3_gsm8k_ablation.pdf")
+    print(f"  3: GSM8K  → {OUTPUT_DIR}/fig3_gsm8k_ablation.pdf")
     plt.close()
 
 
-# ============================================================================
-# 图 4: 频域验证图（SOC）
-# ============================================================================
+#  4: SOC
 def plot_frequency_validation():
     """
-    FDT 初始化的频域验证
+    FDT 
     """
     
     exp_dir = EXPERIMENTS['gsm8k']['fdt']
     spectra_dir = os.path.join(exp_dir, "init_spectra")
     
     if not os.path.exists(spectra_dir):
-        print(f"⚠️  未找到频谱数据: {spectra_dir}")
+        print(f"  : {spectra_dir}")
         return
     
     npz_files = list(Path(spectra_dir).glob("*.npz"))
     
     if not npz_files:
-        print(f"⚠️  {spectra_dir} 中无 .npz 文件")
+        print(f"  {spectra_dir}  .npz ")
         return
     
     data = np.load(npz_files[0])
@@ -470,7 +458,7 @@ def plot_frequency_validation():
     psd = data['psd']
     alpha_fit = float(data['alpha_fit'])
     
-    # 理论曲线
+    # 
     freq_theory = freqs[freqs > 0]
     psd_theory = freq_theory ** (-1.1)
     psd_theory *= psd[len(psd)//4] / psd_theory[len(psd_theory)//4]
@@ -502,26 +490,24 @@ def plot_frequency_validation():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig4_frequency_validation.{fmt}", format=fmt)
     
-    print(f"✓ 图 4: 频域验证 → {OUTPUT_DIR}/fig4_frequency_validation.pdf")
+    print(f"  4:  → {OUTPUT_DIR}/fig4_frequency_validation.pdf")
     plt.close()
 
 
-# ============================================================================
-# 图 5: 效率雷达图（4 数据集综合）
-# ============================================================================
+#  5: 4 
 def plot_efficiency_radar():
     """
-    雷达图对比 4 个数据集的综合效率
-    - 训练时间（归一化）
-    - 峰值内存（归一化）
-    - 吞吐量（归一化）
-    - AUC 改进（百分比）
+     4 
+    - 
+    - 
+    - 
+    - AUC 
     """
     
     datasets = ['gsm8k', 'cmmlu', 'sharegpt', 'mbpp']
     dataset_labels = ['GSM8K', 'CMMLU', 'ShareGPT', 'MBPP']
     
-    # 收集数据
+    # 
     time_ratios = []
     memory_ratios = []
     throughput_ratios = []
@@ -540,45 +526,45 @@ def plot_efficiency_radar():
         with open(fdt_file, 'r') as f:
             fdt = json.load(f)
         
-        # 时间比（FDT / Baseline，越接近 1 越好）
+        # FDT / Baseline 1 
         time_ratio = fdt.get('wall_time_minutes', 0) / baseline.get('wall_time_minutes', 1)
         time_ratios.append(time_ratio)
         
-        # 内存比
+        # 
         memory_ratio = fdt.get('peak_memory_gb', 0) / baseline.get('peak_memory_gb', 1)
         memory_ratios.append(memory_ratio)
         
-        # 吞吐量比（FDT / Baseline）
+        # FDT / Baseline
         throughput_ratio = fdt.get('throughput_samples_per_sec', 0) / baseline.get('throughput_samples_per_sec', 1)
         throughput_ratios.append(throughput_ratio)
         
-        # AUC 改进百分比
+        # AUC 
         baseline_auc = baseline.get('auc_500', 0)
         fdt_auc = fdt.get('auc_500', 0)
         improvement = (baseline_auc - fdt_auc) / baseline_auc * 100 if baseline_auc > 0 else 0
         auc_improvements.append(improvement)
     
-    # 归一化到 0-100
+    #  0-100
     def normalize(values):
         min_val, max_val = min(values), max(values)
         return [(v - min_val) / (max_val - min_val) * 100 if max_val > min_val else 50 for v in values]
     
-    # 雷达图数据（4 个指标）
+    # 4 
     categories = ['Training Time\n(Lower Better)', 
                   'Peak Memory\n(Lower Better)', 
                   'Throughput\n(Higher Better)',
                   'AUC Improvement\n(Higher Better)']
     
-    # 简化版：只画 GSM8K
+    #  GSM8K
     gsm8k_idx = 0
     values = [
-        100 - normalize(time_ratios)[gsm8k_idx],  # 时间越短越好（反转）
-        100 - normalize(memory_ratios)[gsm8k_idx],  # 内存越小越好（反转）
-        normalize(throughput_ratios)[gsm8k_idx],  # 吞吐量越大越好
-        normalize(auc_improvements)[gsm8k_idx],  # 改进越大越好
+        100 - normalize(time_ratios)[gsm8k_idx],  # 
+        100 - normalize(memory_ratios)[gsm8k_idx],  # 
+        normalize(throughput_ratios)[gsm8k_idx],  # 
+        normalize(auc_improvements)[gsm8k_idx],  # 
     ]
     
-    # 闭合雷达图
+    # 
     values += values[:1]
     
     angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
@@ -589,7 +575,7 @@ def plot_efficiency_radar():
     ax.plot(angles, values, 'o-', linewidth=2, label='FDT (α=1.1)', color='#3498DB')
     ax.fill(angles, values, alpha=0.25, color='#3498DB')
     
-    # Baseline 参考线（50 分）
+    # Baseline 50 
     baseline_values = [50] * len(angles)
     ax.plot(angles, baseline_values, '--', linewidth=1.5, label='PEFT Default', color='#95A5A6')
     
@@ -607,17 +593,15 @@ def plot_efficiency_radar():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig5_efficiency_radar.{fmt}", format=fmt)
     
-    print(f"✓ 图 5: 效率雷达图 → {OUTPUT_DIR}/fig5_efficiency_radar.pdf")
+    print(f"  5:  → {OUTPUT_DIR}/fig5_efficiency_radar.pdf")
     plt.close()
 
 
-# ============================================================================
-# 图 6: 详细效率条形图（4 数据集）
-# ============================================================================
+#  6: 4 
 def plot_detailed_efficiency():
     """
-    3 个子图：训练时间、峰值内存、吞吐量
-    每个数据集 Baseline vs FDT
+    3 
+     Baseline vs FDT
     """
     
     datasets = ['gsm8k', 'cmmlu', 'sharegpt', 'mbpp']
@@ -672,28 +656,26 @@ def plot_detailed_efficiency():
     for fmt in ['pdf', 'png']:
         plt.savefig(f"{OUTPUT_DIR}/fig6_detailed_efficiency.{fmt}", format=fmt)
     
-    print(f"✓ 图 6: 详细效率对比 → {OUTPUT_DIR}/fig6_detailed_efficiency.pdf")
+    print(f"  6:  → {OUTPUT_DIR}/fig6_detailed_efficiency.pdf")
     plt.close()
 
 
-# ============================================================================
-# 主函数
-# ============================================================================
+# 
 def main():
     print("="*70)
-    print("📊 生成论文图表（4 数据集完整版）")
+    print(" 4 ")
     print("="*70)
     print()
-    print("数据集:")
-    print("  • GSM8K: 数学推理")
-    print("  • CMMLU: 中文知识")
-    print("  • ShareGPT: 对话交互")
-    print("  • MBPP: 代码生成")
+    print(":")
+    print("  • GSM8K: ")
+    print("  • CMMLU: ")
+    print("  • ShareGPT: ")
+    print("  • MBPP: ")
     print()
-    print("输出目录:", OUTPUT_DIR)
+    print(":", OUTPUT_DIR)
     print()
     
-    # 生成所有图表
+    # 
     plot_4dataset_training_curves()
     plot_step_auc_curves()
     plot_cross_dataset_auc()
@@ -704,10 +686,10 @@ def main():
     
     print()
     print("="*70)
-    print("✅ 所有图表生成完成!")
+    print(" !")
     print("="*70)
     print()
-    print("生成的文件:")
+    print(":")
     for file in sorted(Path(OUTPUT_DIR).glob("*.pdf")):
         print(f"  • {file}")
     print()

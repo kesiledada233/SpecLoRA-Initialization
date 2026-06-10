@@ -192,7 +192,7 @@ def plot_4dataset_training_curves(max_steps: int = 500, smooth_window: int = 20)
             losses_file = os.path.join(exp_dir, "training_losses.npy")
 
             if not os.path.exists(losses_file):
-                print(f"⚠️  未找到: {losses_file}")
+                print(f"  : {losses_file}")
                 continue
 
             losses = np.load(losses_file)
@@ -241,7 +241,7 @@ def plot_4dataset_training_curves(max_steps: int = 500, smooth_window: int = 20)
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ 图 1: 4 数据集训练曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f"  1: 4  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -286,12 +286,12 @@ def plot_alpha_sweep_for_dataset(
                 alpha=0.95,
             )
         else:
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
 
     # Alpha experiments (only selected alpha points)
     alpha_exps_all = _discover_alpha_experiments(dataset)
     if not alpha_exps_all:
-        print(f"⚠️  未找到 alpha 实验目录: outputs_{dataset}/alpha*")
+        print(f"   alpha : outputs_{dataset}/alpha*")
 
     selected_alphas = [0.6, 0.8, 1.0, 1.4]
     alpha_exps: list[tuple[float, str]] = []
@@ -304,7 +304,7 @@ def plot_alpha_sweep_for_dataset(
     missing = [a for a in selected_alphas if round(a, 6) not in present]
     if missing:
         missing_str = ", ".join(f"{a:g}" for a in missing)
-        print(f"⚠️  {dataset}: 缺少指定 alpha 目录: {missing_str}")
+        print(f"  {dataset}:  alpha : {missing_str}")
 
     # Use a qualitative palette with good separability (baseline red is fixed)
     tab10 = sns.color_palette("tab10", n_colors=10)
@@ -328,7 +328,7 @@ def plot_alpha_sweep_for_dataset(
 
         losses_file = os.path.join(exp_dir, "training_losses.npy")
         if not os.path.exists(losses_file):
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
             continue
 
         losses = np.load(losses_file)
@@ -361,7 +361,7 @@ def plot_alpha_sweep_for_dataset(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ {dataset} alpha 曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" {dataset} alpha  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
@@ -416,7 +416,7 @@ def plot_cmmlu_lora_rank_sweep(
                 alpha=0.95,
             )
         else:
-            print(f"⚠️  未找到: {losses_file}")
+            print(f"  : {losses_file}")
 
     # Rank experiments
     rank_map: dict[int, str] = {
@@ -442,7 +442,7 @@ def plot_cmmlu_lora_rank_sweep(
         exp_dir = rank_map[rank]
         losses_file = _pick_losses_file_from_experiment_dir(exp_dir)
         if not losses_file:
-            print(f"⚠️  未找到 rank={rank} 的 training_losses.npy: {exp_dir}")
+            print(f"   rank={rank}  training_losses.npy: {exp_dir}")
             continue
 
         losses = np.load(losses_file)
@@ -475,16 +475,16 @@ def plot_cmmlu_lora_rank_sweep(
     for fmt in ["pdf", "png"]:
         plt.savefig(f"{OUTPUT_DIR}/{out_base}.{fmt}", format=fmt)
 
-    print(f"✓ GSM8K LoRA rank 曲线 → {OUTPUT_DIR}/{out_base}.pdf")
+    print(f" GSM8K LoRA rank  → {OUTPUT_DIR}/{out_base}.pdf")
     plt.close()
 
 
 def main() -> None:
     print("=" * 70)
-    print("📊 仅生成图 1（4 数据集训练曲线）")
+    print("  14 ")
     print("=" * 70)
     print()
-    print("输出目录:", OUTPUT_DIR)
+    print(":", OUTPUT_DIR)
     print()
 
     plot_4dataset_training_curves()
@@ -498,7 +498,7 @@ def main() -> None:
 
     print()
     print("=" * 70)
-    print("✅ 生成完成!")
+    print(" !")
     print("=" * 70)
 
 

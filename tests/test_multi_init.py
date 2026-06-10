@@ -1,13 +1,3 @@
-"""
-
-运行示例:
-  python train_openpangu_fda_lora_final.py \
-      --dataset gsm8k \
-      --init_method pissa \
-      --lora_r 16 \
-      --out_dir outputs_gsm8k_pissa_r16 \
-      --device npu:1
-"""
 
 import os
 os.environ['DISABLE_NPU_FUSED_ATTENTION'] = '1'
@@ -52,7 +42,7 @@ except ImportError:
     print("警告: 未找到datasets库")
     DATASETS_AVAILABLE = False
 
-# ==================== 导入 FDA 模块 ====================
+# 导入 FDA 模块
 print("\n" + "="*70)
 print("加载初始化模块")
 print("="*70)
@@ -61,7 +51,7 @@ for mod in ['fda_init', 'measure_alpha']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-FDA_INIT_PATH = '/rebuttal/FDASOC_init_code'
+FDA_INIT_PATH = None  # set to your local path
 
 for path in sys.path[:]:
     if 'FDA_Init' in path and path != FDA_INIT_PATH:
@@ -69,7 +59,7 @@ for path in sys.path[:]:
 
 if FDA_INIT_PATH in sys.path:
     sys.path.remove(FDA_INIT_PATH)
-sys.path.insert(0, FDA_INIT_PATH)
+# sys.path.insert(0, FDA_INIT_PATH)
 
 try:
     from lora_fda_init import apply_fda_to_lora
@@ -85,17 +75,16 @@ except ImportError as e:
 
 print("="*70 + "\n")
 
-# ==================== 数据集路径配置 ====================
+# 数据集路径配置
 DATASET_PATHS = {
-    'gsm8k': '/rebuttal/datasets/gsm8k',
-    'cmmlu': '/rebuttal/datasets/cmmlu/processed',
-    'sharegpt': '/rebuttal/datasets/sharegpt_datasets',
-    'mbpp': '/rebuttal/datasets/mbpp/processed',
+    'gsm8k': None,  # /path/to/gsm8k
+    'cmmlu': None,  # /path/to/cmmlu/processed
+    'sharegpt': None,  # /path/to/sharegpt_datasets
+    'mbpp': None,  # /path/to/mbpp/processed
 }
 
-# ==================== 数据集类 ====================
+# 数据集类
 class BenchmarkDataset(Dataset):
-    """评测数据集类"""
     
     def __init__(self, tokenizer, examples, max_length=512):
         self.tokenizer = tokenizer
@@ -138,16 +127,14 @@ class BenchmarkDataset(Dataset):
         }
 
 
-# ==================== 工具函数 ====================
+# 工具函数
 def count_parameters(model):
-    """统计模型参数"""
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return total, trainable
 
 
 def convert_to_json_serializable(obj):
-    """转换 numpy 类型"""
     if isinstance(obj, dict):
         return {k: convert_to_json_serializable(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
@@ -167,7 +154,6 @@ def convert_to_json_serializable(obj):
 
 
 def compute_gradient_norm(model):
-    """计算模型梯度的L2范数"""
     total_norm = 0.0
     for p in model.parameters():
         if p.grad is not None:
@@ -178,7 +164,6 @@ def compute_gradient_norm(model):
 
 
 def compute_auc_intervals(losses):
-    """计算不同阶段的AUC"""
     intervals = {
         'auc_0_100': (0, 100),
         'auc_100_500': (100, 500),
@@ -198,7 +183,7 @@ def compute_auc_intervals(losses):
     return results
 
 
-# ==================== 参数配置 ====================
+# 参数配置
 def get_args():
     ap = argparse.ArgumentParser(description="OpenPangu 混合 PEFT 评测数据集训练")
     
@@ -211,7 +196,7 @@ def get_args():
     
     # 模型配置
     ap.add_argument("--model_path", type=str,
-                   default="/rebuttal/models/openPangu-7b",
+                   default=None,  # set to your model path
                    help="预训练模型路径")
     
     # LoRA 配置
@@ -270,7 +255,7 @@ def get_args():
     return args
 
 
-# ==================== 主函数 ====================
+# 主函数
 def main():
     if not PEFT_AVAILABLE:
         print("错误: PEFT库不可用")
@@ -330,7 +315,7 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    print(f"[模型] ✓ Tokenizer: vocab_size={tokenizer.vocab_size}")
+    print(f"[模型]  Tokenizer: vocab_size={tokenizer.vocab_size}")
     
     # LoftQ 内部在接管权重时进行量化，此处依然以 fp16 加载原权重
     model = AutoModelForCausalLM.from_pretrained(
@@ -341,7 +326,7 @@ def main():
     )
     
     total_params, _ = count_parameters(model)
-    print(f"[模型] ✓ 基础权重加载成功: {total_params/1e9:.2f}B 参数\n")
+    print(f"[模型]  基础权重加载成功: {total_params/1e9:.2f}B 参数\n")
     
     # ==================== 步骤 2 & 3: 应用 LoRA 与 初始化策略 ====================
     print("="*70)
@@ -428,7 +413,7 @@ def main():
             os.makedirs(spectra_dir, exist_ok=True)
             alphas = analyze_lora_spectra(model, save_dir=spectra_dir, plot_top_n=3, verbose=args.verbose)
             init_info['measured_alphas_init'] = {k: float(v) for k, v in alphas.items()}
-            print(f"[FDA] ✓ 功率谱保存到: {spectra_dir}")
+            print(f"[FDA]  功率谱保存到: {spectra_dir}")
 
     # 结束计时
     init_time = time.time() - init_start_time
@@ -438,8 +423,8 @@ def main():
     model = model.to(device)
     
     total_params, trainable_params = count_parameters(model)
-    print(f"\n[LoRA] ✓ 初始化完成! 耗时: {init_time*1000:.2f} ms")
-    print(f"[LoRA] ✓ 可训练参数: {trainable_params:,} ({trainable_params/total_params*100:.4f}%)\n")
+    print(f"\n[LoRA]  初始化完成! 耗时: {init_time*1000:.2f} ms")
+    print(f"[LoRA]  可训练参数: {trainable_params:,} ({trainable_params/total_params*100:.4f}%)\n")
     
     # ==================== 步骤 4: 加载数据集 ====================
     print("="*70)
@@ -629,7 +614,7 @@ def main():
         training_log.append(log_entry)
     
     total_time = time.time() - start_time
-    print(f"[训练] ✓ 完成! 耗时: {total_time/60:.2f} 分钟\n")
+    print(f"[训练]  完成! 耗时: {total_time/60:.2f} 分钟\n")
     
     # ==================== 步骤 7: 测试集完整评估 ====================
     print("="*70)

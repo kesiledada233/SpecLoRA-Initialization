@@ -1,5 +1,4 @@
 import os
-
 os.environ['DISABLE_NPU_FUSED_ATTENTION'] = '1'
 os.environ['NPU_FUSED_INFER_ATTENTION'] = '0'
 
@@ -8,6 +7,7 @@ import time
 import argparse
 import random
 import json
+import csv
 import numpy as np
 import torch
 import torch.nn as nn
@@ -75,7 +75,7 @@ DATASET_PATHS = {
     'gsm8k': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/gsm8k',
     'cmmlu': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/cmmlu/processed',
     'sharegpt': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/sharegpt',
-    'mbpp': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/mbpp/processed',  # 
+    'mbpp': '/root/nvme0n1/Noneq_Neural_Network/pretrained_models/mbpp/processed',
 }
 
 class BenchmarkDataset(Dataset):
@@ -149,10 +149,42 @@ def convert_to_json_serializable(obj):
         return str(obj)
 
 
-def get_args():
-    ap = argparse.ArgumentParser(description="OpenPangu FDT ")
+def compute_gradient_norm(model):
+    """L2"""
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** 0.5
+    return total_norm
+
+
+def compute_auc_intervals(losses):
+    """AUC"""
+    intervals = {
+        'auc_0_100': (0, 100),
+        'auc_100_500': (100, 500),
+        'auc_500_1000': (500, 1000),
+        'auc_1000_2500': (1000, 2500),
+        'auc_0_500': (0, 500),
+        'auc_0_2500': (0, 2500),
+    }
     
-    #   
+    results = {}
+    for name, (start, end) in intervals.items():
+        if len(losses) >= end:
+            results[name] = float(sum(losses[start:end]))
+        else:
+            results[name] = None
+    
+    return results
+
+
+def get_args():
+    ap = argparse.ArgumentParser(description="DeepSeek FDT ")
+    
+    # 
     ap.add_argument("--dataset", type=str, required=True,
                    choices=['gsm8k', 'cmmlu', 'sharegpt', 'mbpp'],
                    help="")
@@ -171,18 +203,20 @@ def get_args():
     ap.add_argument("--lora_target_modules", type=str, nargs='+',
                    default=["q_proj", "v_proj"])
     
-    # 
+    #  DeepSeek 
     ap.add_argument("--batch_size", type=int, default=2)
     ap.add_argument("--max_length", type=int, default=512)
     ap.add_argument("--max_iters", type=int, default=2500)
     ap.add_argument("--eval_interval", type=int, default=100)
     ap.add_argument("--grad_accum_steps", type=int, default=4)
     
-    # 
-    ap.add_argument("--lr", type=float, default=5e-5)
+    #  
+    ap.add_argument("--lr", type=float, default=3e-5,
+                   help="DeepSeek3e-5")
     ap.add_argument("--weight_decay", type=float, default=0.01)
     ap.add_argument("--warmup_steps", type=int, default=100)
-    ap.add_argument("--max_grad_norm", type=float, default=1.0)
+    ap.add_argument("--max_grad_norm", type=float, default=0.5,
+                   help="DeepSeek0.5")
     
     # FDT 
     ap.add_argument("--use_fdt_init", action="store_true")
@@ -193,6 +227,14 @@ def get_args():
     ap.add_argument("--plot_spectra", action="store_true")
     ap.add_argument("--init_preset", type=str, default=None,
                    choices=['baseline', 'soft', 'medium', 'strong'])
+    
+    # 
+    ap.add_argument("--record_gradnorm", action="store_true",
+                   help="")
+    ap.add_argument("--full_test_eval", action="store_true",
+                   help="batch")
+    ap.add_argument("--measure_final_spectrum", action="store_true",
+                   help="")
     
     # 
     ap.add_argument("--out_dir", type=str, required=True)
@@ -298,6 +340,8 @@ def main():
     print("  3: FDT ")
     print("="*70)
     
+    init_start_time = time.time()
+    
     # 
     if args.init_preset:
         preset_configs = {
@@ -322,7 +366,9 @@ def main():
         'method': 'peft_default',
         'lora_a_init': 'kaiming_uniform',
         'lora_b_init': 'zero',
-        'measured_alphas': {},
+        'init_time_seconds': None,
+        'measured_alphas_init': {},
+        'measured_alphas_final': {},
         'verification_passed': None,
     }
     
@@ -363,18 +409,15 @@ def main():
                 verbose=args.verbose
             )
             
-            init_info['measured_alphas'] = {k: float(v) for k, v in alphas.items()}
+            init_info['measured_alphas_init'] = {k: float(v) for k, v in alphas.items()}
             print(f"[FDT]  : {spectra_dir}")
     
     else:
         print("[FDT]  PEFT  (Kaiming Uniform + Zero) (Baseline)")
     
-    # 
-    init_info_file = os.path.join(args.out_dir, 'init_info.json')
-    init_info_serializable = convert_to_json_serializable(init_info)
-    with open(init_info_file, 'w') as f:
-        json.dump(init_info_serializable, f, indent=2)
-    print(f"[FDT]  : {init_info_file}\n")
+    init_time = time.time() - init_start_time
+    init_info['init_time_seconds'] = float(init_time)
+    print(f"[FDT] : {init_time*1000:.2f} ms\n")
     
     print("="*70)
     print(f"  4:  ({args.dataset.upper()})")
@@ -398,42 +441,86 @@ def main():
         train_dataset_raw = train_raw
         test_dataset_raw = dataset['test']
         
-        # 
-        max_test_samples = 10000
-        if len(test_dataset_raw) > max_test_samples:
-            test_dataset_raw = test_dataset_raw.select(range(max_test_samples))
-            print(f"[] : {max_test_samples} ")
+        if not args.full_test_eval:
+            max_test_samples = 1000
+            if len(test_dataset_raw) > max_test_samples:
+                test_dataset_raw = test_dataset_raw.select(range(max_test_samples))
+                print(f"[] : {max_test_samples} ")
+        else:
+            print(f"[] : {len(test_dataset_raw)} ")
         
         print(f"\n[] :")
         print(f"  • : {len(train_dataset_raw)} ")
         print(f"  • : {len(test_dataset_raw)} ")
         
-        #   4 
+        #   
         def format_example(example):
+            """"""
+            
             if args.dataset == 'gsm8k':
-                return f"{example['question']}\n{example['answer']}"
+                question = example.get('question', '')
+                answer = example.get('answer', '')
+                return f"{question}\n{answer}"
             
             elif args.dataset == 'cmmlu':
-                question = example['Question']
-                choices = f"A. {example['A']}  B. {example['B']}  C. {example['C']}  D. {example['D']}"
-                answer = example['Answer']
+                question = example.get('Question', '')
+                a = example.get('A', '')
+                b = example.get('B', '')
+                c = example.get('C', '')
+                d = example.get('D', '')
+                answer = example.get('Answer', '')
+                choices = f"A. {a}  B. {b}  C. {c}  D. {d}"
                 return f"{question}\n{choices}\n{answer}"
             
             elif args.dataset == 'sharegpt':
-                # ShareGPT 
-                conversations = example.get('conversations', [])
+                # 
+                conversations = example.get('conversations') or example.get('messages', [])
+                
+                if not conversations:
+                    return "Empty conversation"
+                
                 text = ""
                 for turn in conversations:
-                    role = turn.get('from', 'unknown')
-                    content = turn.get('value', '')
-                    text += f"{role}: {content}\n"
-                return text.strip()
+                    # 
+                    role = turn.get('from') or turn.get('role', 'unknown')
+                    content = turn.get('value') or turn.get('content', '')
+                    
+                    # 
+                    if role in ['human', 'user']:
+                        role = 'User'
+                    elif role in ['gpt', 'assistant']:
+                        role = 'Assistant'
+                    elif role == 'system':
+                        role = 'System'
+                    
+                    if content.strip():
+                        text += f"{role}: {content}\n"
+                
+                return text.strip() if text.strip() else "Empty conversation"
             
             elif args.dataset == 'mbpp':
-                # MBPP 
-                text = example['text']
-                code = example['code']
-                return f"# Problem\n{text}\n\n# Solution\n{code}"
+                # 
+                text = example.get('text') or example.get('prompt') or example.get('description', '')
+                code = example.get('code') or example.get('solution', '')
+                
+                # 
+                test_list = example.get('test_list', [])
+                
+                if not text and not code:
+                    return "Empty code problem"
+                
+                formatted = f"# Problem\n{text}\n\n"
+                
+                if test_list and len(test_list) > 0:
+                    tests = "\n".join([f"# Test: {t}" for t in test_list[:2]])
+                    formatted += f"{tests}\n\n"
+                
+                formatted += f"# Solution\n{code}"
+                
+                return formatted
+            
+            else:
+                raise ValueError(f": {args.dataset}")
         
         print(f"\n[] ...")
         train_texts = [format_example(item) for item in train_dataset_raw]
@@ -480,9 +567,10 @@ def main():
     
     print(f"[] AdamW (lr={args.lr:.2e}, wd={args.weight_decay})")
     print(f"[] Warmup {args.warmup_steps} ")
-    print(f"[] ={args.max_grad_norm}\n")
+    print(f"[] ={args.max_grad_norm}")
+    print(f"[DeepSeek] : lr={args.lr:.2e}, grad_clip={args.max_grad_norm}\n")
     
-    #   
+    # 
     if device_type == 'npu':
         import torch_npu
         start_memory = torch_npu.npu.memory_allocated(device)
@@ -491,6 +579,8 @@ def main():
         start_memory = torch.cuda.memory_allocated(device) if torch.cuda.is_available() else 0
         peak_memory = start_memory
     
+    training_log = []
+    
     print("="*70)
     print("  6: ")
     print("="*70)
@@ -498,15 +588,23 @@ def main():
     model.train()
     
     training_losses = []
+    test_losses_history = []
     best_loss = float('inf')
+    
+    #  NaN  
+    nan_count = 0
+    max_nan_allowed = 10
     
     data_iter = iter(train_loader)
     start_time = time.time()
     
     print(f"\n[] {args.max_iters} ")
+    print(f"[DeepSeek] NaN: {max_nan_allowed} ")
     print("-"*70)
     
     for step in range(1, args.max_iters + 1):
+        step_start_time = time.time()
+        
         try:
             batch = next(data_iter)
         except StopIteration:
@@ -526,10 +624,21 @@ def main():
             outputs = model(**batch)
             loss = outputs.loss / args.grad_accum_steps
             
+            #  NaN 
             if torch.isnan(loss) or torch.isinf(loss):
-                print(f"\n  (Step {step}): {loss.item()}")
+                nan_count += 1
+                print(f"\n  (Step {step}): {loss.item()} ( {nan_count}/{max_nan_allowed} )")
+                
+                if nan_count > max_nan_allowed:
+                    print(f"\n  ({nan_count} )!")
+                    break
+                
                 optimizer.zero_grad()
                 continue
+            
+            #  NaN 
+            if nan_count > 0 and step % 10 == 0:
+                nan_count = max(0, nan_count - 1)
             
             loss.backward()
             
@@ -537,6 +646,11 @@ def main():
             print(f"\n  (Step {step}): {e}")
             optimizer.zero_grad()
             continue
+        
+        # 
+        grad_norm = None
+        if args.record_gradnorm:
+            grad_norm = compute_gradient_norm(model)
         
         # 
         if step % args.grad_accum_steps == 0:
@@ -548,28 +662,40 @@ def main():
         current_loss = loss.item() * args.grad_accum_steps
         training_losses.append(current_loss)
         
-        #   
+        current_lr = scheduler.get_last_lr()[0]
+        
         if device_type == 'npu':
             current_memory = torch_npu.npu.memory_allocated(device)
         else:
             current_memory = torch.cuda.memory_allocated(device) if torch.cuda.is_available() else 0
         peak_memory = max(peak_memory, current_memory)
         
+        step_time = time.time() - step_start_time
+        
+        log_entry = {
+            'step': step,
+            'train_loss': current_loss,
+            'learning_rate': current_lr,
+            'grad_norm': grad_norm,
+            'step_time_ms': step_time * 1000,
+            'memory_gb': (current_memory - start_memory) / 1e9,
+            'test_loss': None,
+        }
+        
         # 
         if step % args.eval_interval == 0 or step == 1:
             elapsed = time.time() - start_time
             avg_train = np.mean(training_losses[-args.eval_interval:])
-            lr_current = scheduler.get_last_lr()[0]
             
             # 
             model.eval()
             test_losses = []
             
             with torch.no_grad():
-                max_eval_batches = 10
+                max_eval_batches = None if args.full_test_eval else 10
                 
                 for batch_idx, test_batch in enumerate(test_loader):
-                    if batch_idx >= max_eval_batches:
+                    if max_eval_batches and batch_idx >= max_eval_batches:
                         break
                     
                     test_batch = {k: v.to(device) for k, v in test_batch.items()}
@@ -590,13 +716,29 @@ def main():
             
             test_loss_avg = np.mean(test_losses) if test_losses else None
             
-            # AUC
-            auc_str = ""
-            if step >= 500:
-                auc_500 = sum(training_losses[:500])
-                auc_str = f", AUC(0-500)={auc_500:.2f}"
+            if test_loss_avg:
+                test_losses_history.append({
+                    'step': step,
+                    'test_loss': test_loss_avg,
+                })
+                log_entry['test_loss'] = test_loss_avg
             
-            #  
+            #   
+            metric_str = ""
+            current_len = len(training_losses)
+            
+            # Loss@100
+            if current_len >= 100:
+                loss_100 = training_losses[99]
+                metric_str += f", L@100={loss_100:.4f}"
+            
+            # Loss@500  AUC(0-500)
+            if current_len >= 500:
+                loss_500 = training_losses[499]
+                auc_500 = sum(training_losses[:500])
+                metric_str += f", L@500={loss_500:.4f}, AUC(0-500)={auc_500:.2f}"
+            
+            # 
             memory_gb = (peak_memory - start_memory) / 1e9
             
             log = f"[{step:5d}/{args.max_iters}] "
@@ -605,26 +747,51 @@ def main():
             if test_loss_avg:
                 log += f", ={test_loss_avg:.4f}"
             
-            log += f", lr={lr_current:.2e}, {elapsed:.1f}s"
-            log += f", Mem={memory_gb:.2f}GB{auc_str}"
+            log += f", lr={current_lr:.2e}, {elapsed:.1f}s"
+            log += f", Mem={memory_gb:.2f}GB"
+            
+            if args.record_gradnorm and grad_norm:
+                log += f", GradNorm={grad_norm:.4f}"
+            
+            log += metric_str
             
             print(log)
             
-            # 
+            #  NPU 
             metric = test_loss_avg if test_loss_avg else avg_train
             
             if metric < best_loss:
                 best_loss = metric
                 best_model_path = os.path.join(args.out_dir, "best_model")
-                model.save_pretrained(best_model_path)
-                print(f"  →  (={best_loss:.4f})")
+                
+                try:
+                    if device_type == 'npu':
+                        # NPU: bin
+                        os.makedirs(best_model_path, exist_ok=True)
+                        
+                        adapter_state = {k: v.cpu() for k, v in model.state_dict().items() if 'lora' in k}
+                        torch.save(adapter_state, os.path.join(best_model_path, "adapter_model.bin"))
+                        
+                        model.peft_config['default'].save_pretrained(best_model_path)
+                        
+                        print(f"  →  (={best_loss:.4f})")
+                    else:
+                        model.save_pretrained(best_model_path)
+                        print(f"  →  (={best_loss:.4f})")
+                except Exception as e:
+                    print(f"   : {e}")
+        
+        training_log.append(log_entry)
     
     total_time = time.time() - start_time
     
     print("-"*70)
     print(f"[]  ! : {total_time/60:.2f} ")
     print(f"[] : {best_loss:.4f}")
-    print(f"[] : {(peak_memory - start_memory) / 1e9:.2f} GB\n")
+    print(f"[] : {(peak_memory - start_memory) / 1e9:.2f} GB")
+    if nan_count > 0:
+        print(f"[]  NaN: {nan_count} ")
+    print()
     
     print("="*70)
     print("  7: ")
@@ -665,6 +832,36 @@ def main():
     print(f"  • : {test_std:.4f}")
     print(f"  • : {len(test_losses)}/{len(test_loader)}\n")
     
+    if args.use_fdt_init and args.measure_final_spectrum:
+        print("="*70)
+        print("  7.5: ")
+        print("="*70)
+        
+        spectra_dir_final = os.path.join(args.out_dir, 'final_spectra')
+        os.makedirs(spectra_dir_final, exist_ok=True)
+        
+        print("[FDT] ...")
+        alphas_final = analyze_lora_spectra(
+            model,
+            save_dir=spectra_dir_final,
+            plot_top_n=3,
+            verbose=args.verbose
+        )
+        
+        init_info['measured_alphas_final'] = {k: float(v) for k, v in alphas_final.items()}
+        
+        print(f"[FDT]  : {spectra_dir_final}")
+        
+        if init_info['measured_alphas_init']:
+            print("\n[FDT] :")
+            for key in init_info['measured_alphas_init']:
+                if key in init_info['measured_alphas_final']:
+                    alpha_init = init_info['measured_alphas_init'][key]
+                    alpha_final = init_info['measured_alphas_final'][key]
+                    delta = alpha_final - alpha_init
+                    print(f"  {key}: {alpha_init:.3f} → {alpha_final:.3f} (Δ={delta:+.3f})")
+        print()
+    
     print("="*70)
     print("  8: ")
     print("="*70)
@@ -674,7 +871,34 @@ def main():
     np.save(losses_file, np.array(training_losses))
     print(f"[]  : {losses_file}")
     
-    #  2. 
+    # 2. CSV
+    csv_file = os.path.join(args.out_dir, "training_log.csv")
+    with open(csv_file, 'w', newline='') as f:
+        if training_log:
+            fieldnames = training_log[0].keys()
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(training_log)
+    print(f"[]  CSV: {csv_file}")
+    
+    # 3. 
+    test_history_file = os.path.join(args.out_dir, "test_loss_history.json")
+    with open(test_history_file, 'w') as f:
+        json.dump(test_losses_history, f, indent=2)
+    print(f"[]  : {test_history_file}")
+    
+    # 4. AUC
+    auc_metrics = compute_auc_intervals(training_losses)
+    
+    # 5. 
+    early_convergence = {
+        'loss_at_100': float(training_losses[99]) if len(training_losses) >= 100 else None,
+        'loss_at_200': float(training_losses[199]) if len(training_losses) >= 200 else None,
+        'loss_at_500': float(training_losses[499]) if len(training_losses) >= 500 else None,
+        'loss_at_1000': float(training_losses[999]) if len(training_losses) >= 1000 else None,
+    }
+    
+    # 6. 
     results = {
         'dataset': args.dataset,
         'model_path': args.model_path,
@@ -682,40 +906,63 @@ def main():
         'lora_alpha': args.lora_alpha,
         'init_method': 'FDT' if args.use_fdt_init else 'PEFT_Default',
         'init_alpha': args.fdt_alpha if args.use_fdt_init else None,
+        'init_preset': args.init_preset,
         
-        # 
         'best_train_loss': float(best_loss),
         'final_test_loss': float(test_loss),
         'final_test_loss_std': float(test_std),
-        'auc_500': float(sum(training_losses[:500])) if len(training_losses) >= 500 else None,
         
-        #   
+        'early_convergence': early_convergence,
+        'auc_metrics': auc_metrics,
+        
         'wall_time_seconds': float(total_time),
         'wall_time_minutes': float(total_time / 60),
         'peak_memory_gb': float((peak_memory - start_memory) / 1e9),
         'throughput_samples_per_sec': float(len(train_dataset) / total_time),
-        'avg_time_per_step_ms': float(total_time * 1000 / args.max_iters),
+        'avg_time_per_step_ms': float(total_time * 1000 / len(training_losses)),
         
-        # 
+        'init_time_seconds': init_info['init_time_seconds'],
+        'init_time_ms': init_info['init_time_seconds'] * 1000 if init_info['init_time_seconds'] else None,
+        
         'num_train_samples': len(train_dataset),
         'num_test_samples': len(test_dataset),
         'test_batches_evaluated': len(test_losses),
+        
+        'nan_count': nan_count,
+        
+        'measured_alphas_init': init_info.get('measured_alphas_init', {}),
+        'measured_alphas_final': init_info.get('measured_alphas_final', {}),
     }
     
     results_file = os.path.join(args.out_dir, "results.json")
+    results_serializable = convert_to_json_serializable(results)
     with open(results_file, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(results_serializable, f, indent=2)
     print(f"[]  : {results_file}")
     
-    # 3. 
+    # 7. 
+    init_info_file = os.path.join(args.out_dir, 'init_info.json')
+    init_info_serializable = convert_to_json_serializable(init_info)
+    with open(init_info_file, 'w') as f:
+        json.dump(init_info_serializable, f, indent=2)
+    print(f"[]  : {init_info_file}")
+    
+    # 8. 
     final_path = os.path.join(args.out_dir, "final_model")
     try:
-        model.save_pretrained(final_path)
-        print(f"[]  : {final_path}")
+        if device_type == 'npu':
+            os.makedirs(final_path, exist_ok=True)
+            adapter_state = {k: v.cpu() for k, v in model.state_dict().items() if 'lora' in k}
+            torch.save(adapter_state, os.path.join(final_path, "adapter_model.bin"))
+            model.peft_config['default'].save_pretrained(final_path)
+            print(f"[]  : {final_path}")
+        else:
+            model.save_pretrained(final_path)
+            print(f"[]  : {final_path}")
     except Exception as e:
         print(f"[]  : {e}")
     
-    # 4. Tokenizer
+    # 9. Tokenizer
     try:
         tokenizer.save_pretrained(args.out_dir)
         print(f"[]  Tokenizer: {args.out_dir}\n")
@@ -728,18 +975,37 @@ def main():
     print(f"\n: {args.dataset.upper()}")
     print(f": {args.model_path.split('/')[-1]}")
     print(f"LoRA : r={args.lora_r}")
-    print(f": {'FDT (α='+str(args.fdt_alpha)+')' if args.use_fdt_init else ' PEFT Default (Kaiming+Zero)'}")
-    print(f"\n: {best_loss:.4f}")
-    print(f": {test_loss:.4f}")
+    print(f": {'FDT (α='+str(args.fdt_alpha)+')' if args.use_fdt_init else 'PEFT Default (Kaiming+Zero)'}")
     
-    if len(training_losses) >= 500:
-        print(f"AUC(0-500): {sum(training_losses[:500]):.2f}")
+    print(f"\n :")
+    print(f"  • : {best_loss:.4f}")
+    print(f"  • : {test_loss:.4f}")
     
-    print(f"\n: {total_time/60:.2f} ")
-    print(f": {(peak_memory - start_memory) / 1e9:.2f} GB")
-    print(f": {len(train_dataset) / total_time:.2f} samples/s")
+    if early_convergence['loss_at_100']:
+        print(f"\n :")
+        print(f"  • Loss@100: {early_convergence['loss_at_100']:.4f}")
+        if early_convergence['loss_at_500']:
+            print(f"  • Loss@500: {early_convergence['loss_at_500']:.4f}")
     
-    print(f"\n: {args.out_dir}")
+    if auc_metrics.get('auc_0_500'):
+        print(f"\n AUC :")
+        print(f"  • AUC(0-500): {auc_metrics['auc_0_500']:.2f}")
+        if auc_metrics.get('auc_0_2500'):
+            print(f"  • AUC(0-2500): {auc_metrics['auc_0_2500']:.2f}")
+    
+    print(f"\n⏱ :")
+    print(f"  • : {total_time/60:.2f} ")
+    print(f"  • : {(peak_memory - start_memory) / 1e9:.2f} GB")
+    print(f"  • : {len(train_dataset) / total_time:.2f} samples/s")
+    
+    if init_info['init_time_seconds']:
+        print(f"  • : {init_info['init_time_seconds']*1000:.2f} ms")
+    
+    if nan_count > 0:
+        print(f"\n :")
+        print(f"  • NaN: {nan_count} ")
+    
+    print(f"\n : {args.out_dir}")
     print("="*70 + "\n")
 
 

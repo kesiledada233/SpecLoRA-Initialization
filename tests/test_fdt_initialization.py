@@ -1,28 +1,20 @@
-import sys
-sys.path.insert(0, '/root/nvme0n1/Noneq_Neural_Network/FDT_Init')
-
 import torch
 from transformers import AutoModelForCausalLM
 from peft import get_peft_model, LoraConfig, TaskType
 
-# 清除缓存
-for mod in ['fdt_init', 'measure_alpha']:
-    if mod in sys.modules:
-        del sys.modules[mod]
+from speclora import apply_fdt_to_lora, measure_alpha
 
-from fdt_init import apply_fdt_to_lora
-from measure_alpha import measure_alpha
 
-print("="*70)
-print("快速验证：FDT 初始化是否生效")
-print("="*70)
+print("=" * 70)
+print("FDT Initialization Test")
+print("=" * 70)
 
-# 1. 加载小模型
-print("\n[1/4] 加载模型...")
+# 1. Load base model
+print("\n[1/4] Loading base model...")
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 
-# 2. 应用 LoRA
-print("\n[2/4] 应用 LoRA...")
+# 2. Apply LoRA
+print("\n[2/4] Applying LoRA...")
 lora_config = LoraConfig(
     r=8,
     lora_alpha=16,
@@ -33,29 +25,29 @@ lora_config = LoraConfig(
 )
 model = get_peft_model(model, lora_config)
 
-# 3. 检查参数名
-print("\n[3/4] 检查参数名...")
+# 3. Collect LoRA parameters
+print("\n[3/4] Collecting LoRA parameters...")
 lora_params = []
 for name, param in model.named_parameters():
     if param.requires_grad:
-        print(f"  • {name}: {param.shape}")
+        print(f"  - {name}: {param.shape}")
         lora_params.append((name, param))
 
-print(f"\n共 {len(lora_params)} 个可训练参数")
+print(f"\nTotal LoRA params: {len(lora_params)}")
 
-# 4. 应用 FDT 初始化
-print("\n[4/4] 应用 FDT 初始化...")
+# 4. Apply FDT initialization
+print("\n[4/4] Applying FDT initialization...")
 model = apply_fdt_to_lora(model, alpha=1.2, verbose=True)
 
-# 5. 验证
-print("\n" + "="*70)
-print("验证结果")
-print("="*70)
+# 5. Verify alpha values
+print("\n" + "=" * 70)
+print("Verification")
+print("=" * 70)
 
 for name, param in lora_params:
     alpha = measure_alpha(param)
     error = abs(alpha - 1.2)
-    status = "✓" if error < 0.15 else "✗"
-    print(f"{status} {name}: α={alpha:.3f} (误差={error:.3f})")
+    status = "PASS" if error < 0.15 else "FAIL"
+    print(f"{status} {name}: alpha={alpha:.3f} (error={error:.3f})")
 
-print("="*70)
+print("=" * 70)

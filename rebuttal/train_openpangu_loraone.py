@@ -1,15 +1,3 @@
-"""
-OpenPangu LoRA-One 独立训练与验证脚本
-通过收集第一步全量梯度并提取 SVD 主成分来初始化 LoRA 参数。
-
-运行示例:
-  python train_lora_one.py \
-      --dataset gsm8k \
-      --lora_r 16 \
-      --out_dir outputs_gsm8k_lora_one_r16 \
-      --device npu:1
-"""
-
 import os
 os.environ['DISABLE_NPU_FUSED_ATTENTION'] = '1'
 os.environ['NPU_FUSED_INFER_ATTENTION'] = '0'
@@ -27,7 +15,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedul
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_from_disk
 
-# ==================== 数据集路径配置 ====================
 DATASET_PATHS = {
     'gsm8k': '/rebuttal/datasets/gsm8k',
     'cmmlu': '/rebuttal/datasets/cmmlu/processed',
@@ -47,10 +34,9 @@ class BenchmarkDataset(Dataset):
         item = self.examples[idx]
         return {'input_ids': item['input_ids'], 'attention_mask': item['attention_mask'], 'labels': item['input_ids'].clone()}
 
-# ==================== ⚡⚡⚡ LoRA-One 核心初始化函数 ⚡⚡⚡ ====================
 def apply_lora_one_init(model, dataloader, device, r):
     print("\n" + "="*70)
-    print("🔬 执行 LoRA-One 梯度与 SVD 初始化")
+    print("  LoRA-One  SVD ")
     print("="*70)
     
     lora_layers = []
@@ -58,10 +44,10 @@ def apply_lora_one_init(model, dataloader, device, r):
         if hasattr(module, "lora_A") and hasattr(module, "base_layer"):
             lora_layers.append(module)
             if hasattr(module.base_layer, "weight"):
-                module.base_layer.weight.requires_grad = True # 解冻底座以获取梯度
+                module.base_layer.weight.requires_grad = True # 
                 
     if not lora_layers:
-        print("⚠️ 未找到标准 LoRA 层结构，跳过初始化。")
+        print("  LoRA ")
         return 0
 
     model.train(); model.zero_grad()
@@ -71,58 +57,57 @@ def apply_lora_one_init(model, dataloader, device, r):
     batch = {k: v.half().to(device) if device.type == 'npu' and v.dtype in [torch.float32, torch.float64] else v.to(device) for k, v in batch.items()}
     
     start_time = time.time()
-    print("[LoRA-One] 计算初始梯度中...")
+    print("[LoRA-One] ...")
     loss = model(**batch).loss
     loss.backward()
     
-    print(f"[LoRA-One] 提取梯度主成分并覆盖权重 (Rank={r})...")
+    print(f"[LoRA-One]  (Rank={r})...")
     with torch.no_grad():
         for module in lora_layers:
             if not hasattr(module.base_layer, "weight") or module.base_layer.weight.grad is None: continue
             
-            # NPU 上的 SVD 算子可能不可用/不稳定；这里将梯度搬到 CPU，使用低秩 SVD 只求 top-r。
+            # NPU  SVD / CPU SVD  top-r
             grad_w = module.base_layer.weight.grad.detach().to(torch.float32).cpu()
             m, n = grad_w.shape
             q = min(max(r + 8, r), m, n)
             if q <= 0:
                 continue
 
-            # torch.svd_lowrank 返回 U: [m, q], S: [q], V: [n, q]
+            # torch.svd_lowrank  U: [m, q], S: [q], V: [n, q]
             try:
                 U, S, V = torch.svd_lowrank(grad_w, q=q, niter=4)
                 Vh = V.transpose(0, 1)
             except Exception:
-                # 回退：如果低秩分解失败，再尝试全量 SVD（仍在 CPU 上）
+                #  SVD CPU 
                 U, S, Vh = torch.linalg.svd(grad_w, full_matrices=False)
             
             adapter_name = list(module.lora_A.keys())[0]
             scale = module.scaling.get(adapter_name, 1.0)
             
-            # 分配特征
+            # 
             sqrt_S = torch.sqrt(S[:r]) / math.sqrt(scale)
             B_init = U[:, :r] * sqrt_S.unsqueeze(0)
             A_init = sqrt_S.unsqueeze(1) * Vh[:r, :]
             
-            # 覆盖权重
+            # 
             target_device = module.lora_A[adapter_name].weight.device
             module.lora_A[adapter_name].weight.copy_(A_init.to(device=target_device, dtype=module.lora_A[adapter_name].weight.dtype))
             module.lora_B[adapter_name].weight.copy_(B_init.to(device=target_device, dtype=module.lora_B[adapter_name].weight.dtype))
             
-            # 恢复现场
+            # 
             module.base_layer.weight.requires_grad = False
             module.base_layer.weight.grad = None
             
     model.zero_grad()
     elapsed = time.time() - start_time
-    print(f"[LoRA-One] ✓ SVD 矩阵对齐完成！耗时: {elapsed:.2f}秒\n")
+    print(f"[LoRA-One]  SVD : {elapsed:.2f}\n")
     return elapsed
 
-# ==================== 工具函数 ====================
 def compute_gradient_norm(model): return sum(p.grad.data.norm(2).item() ** 2 for p in model.parameters() if p.grad is not None) ** 0.5
 def compute_auc_intervals(losses): return {name: float(sum(losses[s:e])) if len(losses) >= e else None for name, (s, e) in {'auc_0_100': (0, 100), 'auc_0_500': (0, 500)}.items()}
 
 def get_args():
-    ap = argparse.ArgumentParser(description="OpenPangu LoRA-One 训练脚本")
+    ap = argparse.ArgumentParser(description="OpenPangu LoRA-One ")
     ap.add_argument("--dataset", type=str, required=True, choices=['gsm8k', 'cmmlu', 'sharegpt', 'mbpp'])
     ap.add_argument("--num_samples", type=int, default=0)
     ap.add_argument("--model_path", type=str, default="/rebuttal/models/openPangu-7b")
@@ -158,7 +143,7 @@ def main():
         torch_npu.npu.set_device(device)
         torch_npu.npu.manual_seed_all(args.seed)
 
-    print("="*70 + "\n📦 步骤 1 & 2: 加载模型与基础 LoRA\n" + "="*70)
+    print("="*70 + "\n  1 & 2:  LoRA\n" + "="*70)
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True, use_fast=False)
     if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(args.model_path, trust_remote_code=True, torch_dtype=torch.float16)
@@ -167,25 +152,25 @@ def main():
     model = get_peft_model(model, lora_config)
     model = model.to(device)
 
-    print("="*70 + "\n📊 步骤 3: 加载数据集\n" + "="*70)
+    print("="*70 + "\n  3: \n" + "="*70)
     dataset = load_from_disk(DATASET_PATHS[args.dataset])
     train_raw, test_raw = dataset['train'], dataset['test']
     if args.num_samples > 0: train_raw = train_raw.select(range(args.num_samples))
     if not args.full_test_eval and len(test_raw) > 1000: test_raw = test_raw.select(range(1000))
     
     def format_ex(ex):
-        if args.dataset == 'gsm8k': return f"问题：{ex['question']}\n解答：{ex['answer']}"
-        elif args.dataset == 'cmmlu': return f"问题：{ex['Question']}\n选项：A.{ex['A']} B.{ex['B']} C.{ex['C']} D.{ex['D']}\n答案：{ex['Answer']}"
+        if args.dataset == 'gsm8k': return f"{ex['question']}\n{ex['answer']}"
+        elif args.dataset == 'cmmlu': return f"{ex['Question']}\nA.{ex['A']} B.{ex['B']} C.{ex['C']} D.{ex['D']}\n{ex['Answer']}"
         elif args.dataset == 'sharegpt': return "\n".join([f"{t.get('from')}: {t.get('value')}" for t in ex.get('conversations', [])]).strip()
         elif args.dataset == 'mbpp': return f"# Problem\n{ex['text']}\n\n# Solution\n{ex['code']}"
 
     train_loader = DataLoader(BenchmarkDataset(tokenizer, [format_ex(i) for i in train_raw], args.max_length), batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(BenchmarkDataset(tokenizer, [format_ex(i) for i in test_raw], args.max_length), batch_size=args.batch_size, shuffle=False)
 
-    # ⚡⚡⚡ 触发 LoRA-One 初始化 ⚡⚡⚡
+    #   LoRA-One  
     lora_one_init_time = apply_lora_one_init(model, train_loader, device, args.lora_r)
 
-    print("="*70 + "\n🚀 步骤 4: 开始训练\n" + "="*70)
+    print("="*70 + "\n  4: \n" + "="*70)
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=args.max_iters)
@@ -230,7 +215,7 @@ def main():
         training_log.append(log_entry)
 
     total_time = time.time() - start_time
-    print("="*70 + "\n💾 步骤 5: 保存结果\n" + "="*70)
+    print("="*70 + "\n  5: \n" + "="*70)
     np.save(os.path.join(args.out_dir, "training_losses.npy"), np.array(training_losses))
     with open(os.path.join(args.out_dir, "training_log.csv"), 'w', newline='') as f:
         if training_log: writer = csv.DictWriter(f, fieldnames=training_log[0].keys()); writer.writeheader(); writer.writerows(training_log)
@@ -238,7 +223,7 @@ def main():
     results = {'dataset': args.dataset, 'algo': 'LoRA-One', 'init_time_s': lora_one_init_time, 'best_loss': best_loss, 'auc': compute_auc_intervals(training_losses), 'time_m': total_time/60}
     with open(os.path.join(args.out_dir, "results.json"), 'w') as f: json.dump(results, f, indent=2)
     model.save_pretrained(os.path.join(args.out_dir, "final_model"))
-    print("🎉 LoRA-One 训练完成！")
+    print(" LoRA-One ")
 
 if __name__ == "__main__":
     main()

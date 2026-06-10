@@ -13,7 +13,6 @@ from pathlib import Path
 # Set font (remove Chinese font, use default)
 matplotlib.rcParams['font.size'] = 11
 
-# ==================== Configuration ====================
 BASELINE_DIR = "/root/nvme0n1/Noneq_Neural_Network/FDT_Init/outputs_sharegpt/baseline"
 FDT_DIR = "/root/nvme0n1/Noneq_Neural_Network/FDT_Init/outputs_sharegpt/alpha0.6"
 OUTPUT_DIR = "/root/nvme0n1/Noneq_Neural_Network/FDT_Init/comparison_sharegpt_plots_final"
@@ -21,10 +20,9 @@ OUTPUT_DIR = "/root/nvme0n1/Noneq_Neural_Network/FDT_Init/comparison_sharegpt_pl
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 print("="*70)
-print("📊 FDT Initialization Comparison Visualization")
+print(" FDT Initialization Comparison Visualization")
 print("="*70)
 
-# ==================== 1. Load Data ====================
 print("\n[1/5] Loading data...")
 
 def load_experiment_data(exp_dir):
@@ -35,9 +33,9 @@ def load_experiment_data(exp_dir):
     losses_file = os.path.join(exp_dir, "training_losses.npy")
     if os.path.exists(losses_file):
         data['train_losses'] = np.load(losses_file)
-        print(f"  ✓ {exp_dir}: Training losses ({len(data['train_losses'])} steps)")
+        print(f"   {exp_dir}: Training losses ({len(data['train_losses'])} steps)")
     else:
-        print(f"  ✗ {exp_dir}: training_losses.npy not found")
+        print(f"   {exp_dir}: training_losses.npy not found")
         data['train_losses'] = None
     
     # 2. Evaluation losses
@@ -45,9 +43,9 @@ def load_experiment_data(exp_dir):
     if os.path.exists(eval_file):
         with open(eval_file, 'r') as f:
             data['eval_losses'] = json.load(f)
-        print(f"  ✓ {exp_dir}: Evaluation losses")
+        print(f"   {exp_dir}: Evaluation losses")
     else:
-        print(f"  ✗ {exp_dir}: eval_losses.json not found")
+        print(f"   {exp_dir}: eval_losses.json not found")
         data['eval_losses'] = None
     
     # 3. Initialization info
@@ -55,7 +53,7 @@ def load_experiment_data(exp_dir):
     if os.path.exists(init_file):
         with open(init_file, 'r') as f:
             data['init_info'] = json.load(f)
-        print(f"  ✓ {exp_dir}: Initialization info")
+        print(f"   {exp_dir}: Initialization info")
     else:
         data['init_info'] = {}
     
@@ -74,10 +72,9 @@ fdt_data = load_experiment_data(FDT_DIR)
 
 # Check data integrity
 if baseline_data['train_losses'] is None or fdt_data['train_losses'] is None:
-    print("\n❌ Error: Missing training loss files, cannot generate plots")
+    print("\n Error: Missing training loss files, cannot generate plots")
     exit(1)
 
-# ==================== 2. Compute Metrics ====================
 print("\n[2/5] Computing key metrics...")
 
 def compute_metrics(data):
@@ -145,10 +142,9 @@ for key in baseline_metrics.keys():
 
 print("\n  Improvement percentages:")
 for k, v in improvements.items():
-    sign = "✅" if v > 0 else "❌"
+    sign = "" if v > 0 else ""
     print(f"    {sign} {k}: {v:+.1f}%")
 
-# ==================== 3. Plot Training Curves ====================
 print("\n[3/5] Plotting training curves...")
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -258,10 +254,9 @@ ax4.set_ylim(0, max(auc_baseline, auc_fdt) * 1.15)
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, '1_training_curves.png'), dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: {OUTPUT_DIR}/1_training_curves.png")
+print(f"   Saved: {OUTPUT_DIR}/1_training_curves.png")
 plt.close()
 
-# ==================== 4. Plot Key Metrics Comparison ====================
 print("\n[4/5] Plotting key metrics comparison...")
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -322,7 +317,7 @@ ax2.set_title('FDT Improvement over Baseline', fontsize=14, fontweight='bold')
 ax2.grid(axis='x', alpha=0.3, linestyle='--')
 
 # Add legend
-ax2.text(0.02, 0.98, '✅ Green = Improvement\n❌ Red = Degradation',
+ax2.text(0.02, 0.98, ' Green = Improvement\n Red = Degradation',
          transform=ax2.transAxes,
          fontsize=10,
          verticalalignment='top',
@@ -330,10 +325,9 @@ ax2.text(0.02, 0.98, '✅ Green = Improvement\n❌ Red = Degradation',
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, '2_metrics_comparison.png'), dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: {OUTPUT_DIR}/2_metrics_comparison.png")
+print(f"   Saved: {OUTPUT_DIR}/2_metrics_comparison.png")
 plt.close()
 
-# ==================== 5. Plot Phase Analysis ====================
 print("\n[5/5] Plotting phase analysis...")
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -383,10 +377,9 @@ for idx, (start, end, title) in enumerate(phases):
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, '3_phase_analysis.png'), dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: {OUTPUT_DIR}/3_phase_analysis.png")
+print(f"   Saved: {OUTPUT_DIR}/3_phase_analysis.png")
 plt.close()
 
-# ==================== 6. Generate Text Report ====================
 print("\n[6/6] Generating text report...")
 
 report_file = os.path.join(OUTPUT_DIR, 'comparison_report.txt')
@@ -396,14 +389,14 @@ with open(report_file, 'w', encoding='utf-8') as f:
     f.write("FDT Initialization vs Baseline Comparison Report (WikiText-2)\n")
     f.write("="*70 + "\n\n")
     
-    f.write("【Experiment Configuration】\n")
+    f.write("Experiment Configuration\n")
     f.write(f"  Dataset: WikiText-2\n")
     f.write(f"  Model: OpenPangu-7B (LoRA)\n")
     f.write(f"  Training Steps: {len(baseline_losses)}\n")
     f.write(f"  Baseline: Xavier Initialization\n")
     f.write(f"  FDT: α=1.1 (Pink Noise)\n\n")
     
-    f.write("【Key Metrics Comparison】\n")
+    f.write("Key Metrics Comparison\n")
     f.write(f"{'Metric':<20} {'Baseline':<15} {'FDT α=1.1':<15} {'Improvement':<10}\n")
     f.write("-"*70 + "\n")
     
@@ -420,10 +413,10 @@ with open(report_file, 'w', encoding='utf-8') as f:
             'best_loss': 'Best Loss',
         }[key]
         
-        sign = "✅" if improve > 0 else "❌"
+        sign = "" if improve > 0 else ""
         f.write(f"{key_name:<20} {baseline_val:<15.4f} {fdt_val:<15.4f} {sign} {improve:+.1f}%\n")
     
-    f.write("\n【Phase Analysis】\n\n")
+    f.write("\nPhase Analysis\n\n")
     
     for start, end, title in phases:
         baseline_phase = baseline_losses[start-1:end]
@@ -438,7 +431,7 @@ with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"  FDT Average Loss: {fdt_mean:.4f}\n")
         f.write(f"  Improvement: {improvement_phase:+.1f}%\n\n")
     
-    f.write("【Main Findings】\n\n")
+    f.write("Main Findings\n\n")
     
     f.write("1. Early Convergence Speed (AUC 0-500):\n")
     f.write(f"   FDT significantly outperforms Baseline, reducing cumulative loss by {improvements['auc_500']:.1f}%\n\n")
@@ -461,11 +454,10 @@ with open(report_file, 'w', encoding='utf-8') as f:
     
     f.write("="*70 + "\n")
 
-print(f"  ✓ Saved: {report_file}")
+print(f"   Saved: {report_file}")
 
-# ==================== Complete ====================
 print("\n" + "="*70)
-print("✅ All plots generated successfully!")
+print(" All plots generated successfully!")
 print("="*70)
 print(f"\nOutput directory: {OUTPUT_DIR}/")
 print("\nGenerated files:")
