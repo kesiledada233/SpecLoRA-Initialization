@@ -60,6 +60,10 @@ The unified training script supports the following datasets:
 - **ShareGPT**: Dialogue interaction
 - **MBPP**: Code generation
 
+## Hardware
+
+All experiments were conducted on **Huawei Ascend 910B2** (8 cards).
+
 ## Reproduce Main Experiments
 
 ```bash
