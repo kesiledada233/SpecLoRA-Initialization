@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Experiment outputs
+outputs_*/
+best_model/
+final_model/
+init_spectra/
+*.npz
+*.npy
+*.pth
+*.bin
+*.safetensors
+training_losses.npy
+training_log.csv
+test_loss_history.json
+results.json
+init_info.json
+config_init_only.json
+
+# Plots and figures
+*.png
+*.pdf
+!method_overview_assets.pdf
+
+# Data
+data/*
+!data/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model artifacts
+tokenizer.model
+tokenizer_config.json
+special_tokens_map.json
+tokenization_*.py
+chat_template.jinja
+config.json
+
+# Misc
+kernel_meta/
