@@ -75,6 +75,19 @@ python experiments/train_openpangu_speclora.py \
     --out_dir outputs_gsm8k_speclora_r16
 ```
 
+## Third-Party Model Notice
+
+This repository uses the **openPangu** large language model for experimental validation. Use of the openPangu model is subject to the **OPENPANGU MODEL LICENSE AGREEMENT VERSION 1.0**.
+
+**Attribution:**
+- **Powered by openPangu**
+- **openPangu is a trademark of Huawei Technologies Co., Ltd.**
+
+**Restrictions:**
+- The openPangu model **must not** be accessed, downloaded, installed, run, deployed, integrated, modified, or otherwise used, directly or indirectly, **within the European Union**.
+
+The full text of the OPENPANGU MODEL LICENSE AGREEMENT VERSION 1.0 is included in [`OPENPANGU_LICENSE`](OPENPANGU_LICENSE).
+
 ## License
 
-MIT
+The SpecLoRA initialization code in this repository is licensed under the MIT License. Use of the openPangu model is governed by the OPENPANGU MODEL LICENSE AGREEMENT VERSION 1.0 (see [`OPENPANGU_LICENSE`](OPENPANGU_LICENSE)).
